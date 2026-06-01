@@ -20,7 +20,9 @@ def _modules():
     stay importable — and unit-testable — outside of Blender.
     """
     from . import operators, ui
-    return (operators, ui)
+    from .update import ops as update_ops
+
+    return (operators, ui, update_ops)
 
 
 def register():
