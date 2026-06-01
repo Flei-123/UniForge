@@ -29,6 +29,7 @@ class _Options:
     bake_unsupported = True
     embed_textures = False
     selection_only = False
+    filepath = ""  # set in main(); the exporter derives the output dir from it
 
     def report(self, level, message):
         print(f"  report[{'/'.join(level)}]: {message}")
@@ -62,6 +63,10 @@ def _build_scene():
     tree.links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
     tree.links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
 
+    # A Brick Texture (bake-only) feeding Metallic exercises the bake fallback.
+    brick = tree.nodes.new("ShaderNodeTexBrick")
+    tree.links.new(brick.outputs["Color"], bsdf.inputs["Metallic"])
+
     obj.data.materials.append(mat)
     return obj
 
@@ -70,17 +75,26 @@ def main():
     obj = _build_scene()
     options = _Options()
 
+    out_path = os.path.join(tempfile.gettempdir(), "uniforge_test.unif")
+    options.filepath = out_path  # exporter derives the bake/texture dir from this
+
     writer = UnifWriter()
     writer.write_header("test.blend")
     mesh_export.export_object(obj, writer, options)
     material_export.export_materials(obj, writer, options)
 
-    out_path = os.path.join(tempfile.gettempdir(), "uniforge_test.unif")
     writer.save(out_path)
 
     print("\n=== .unif output ===")
     print(writer.render())
     print(f"=== written to {out_path} ===")
+
+    # Report any baked textures produced alongside the .unif.
+    out_dir = os.path.dirname(out_path)
+    baked = [f for f in os.listdir(out_dir) if f.endswith("_baked.png")]
+    for name in baked:
+        size = os.path.getsize(os.path.join(out_dir, name))
+        print(f"=== baked texture: {name} ({size} bytes) ===")
 
 
 if __name__ == "__main__":

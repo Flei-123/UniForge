@@ -11,14 +11,21 @@
 
 ## v1.0 Definition of Done
 
-- [ ] Blender addon registers, appears in `File > Export` and N-Panel.
-- [ ] Mesh export: vertices, triangulated faces, UVs, normals.
-- [ ] Coordinate conversion Z-up → Y-up + winding flip.
-- [ ] Transform export (position / rotation / scale).
-- [ ] Node-tree walk with supported-node serialization.
-- [ ] Connection serialization.
-- [ ] Bake fallback for unsupported nodes (when enabled).
-- [ ] `.unif` writer produces spec-compliant output.
-- [ ] Unity ScriptedImporter parses `.unif`.
-- [ ] Mesh / ShaderGraph / Material / Prefab generation.
+- [x] Blender addon registers, appears in `File > Export` and N-Panel.
+- [x] Mesh export: vertices, triangulated faces, UVs, normals.
+- [x] Coordinate conversion Z-up → Y-up + winding flip.
+- [x] Transform export (position / rotation / scale). *(rotation handedness pending round-trip verification)*
+- [x] Node-tree walk with supported-node serialization.
+- [x] Connection serialization.
+- [x] Bake fallback for unsupported nodes (when enabled).
+- [x] `.unif` writer produces spec-compliant output.
+- [x] Unity ScriptedImporter parses `.unif`. *(parser verified standalone)*
+- [~] Mesh / Material / Prefab generation. *(implemented; Shader Graph asset generation only for complex graphs — see below; untested in Unity)*
 - [ ] URP + HDRP verified on Unity 2021.3 LTS and Unity 6.
+
+## Bonus (beyond original v1.0 scope)
+
+- [x] In-addon updater (GitHub Releases, one-click install).
+- [ ] Full Shader Graph *asset* generation for procedural node networks
+      (Lit material used when sufficient).
+- [ ] Material browser (Poly Haven / ambientCG, CC0) — future.
