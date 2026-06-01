@@ -62,6 +62,17 @@ Each block holds key-value pairs (`key: value`) or nested sub-blocks.
 - Inline attributes (e.g. `path=tiles_diffuse.png`) sit on the header line.
 - Indented `key: value` lines are node parameters (e.g. `roughness: 0.35`).
 
+#### Inline attribute quoting
+
+Inline attribute values are space-delimited on the header line. A value that
+contains whitespace, `=`, `]`, or is empty is **double-quoted**; literal `"`
+and `\` inside are backslash-escaped. Parsers must accept both forms:
+
+```
+[NODE ImageTexture id=1 path=tiles_diffuse.png]
+[NODE ImageTexture id=2 path="wet tiles/diffuse 01.png"]
+```
+
 ### `[CONNECTION]` syntax
 
 ```
