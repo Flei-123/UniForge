@@ -56,7 +56,9 @@ class UnifWriter:
         self._kv("slot", slot)
 
     def write_node(self, unif_type, node_id, attrs=None, params=None):
-        attr_str = "".join(f" {k}={v}" for k, v in (attrs or {}).items())
+        attr_str = "".join(
+            f" {k}={_format_attr(v)}" for k, v in (attrs or {}).items()
+        )
         self._block(f"NODE {unif_type} id={node_id}{attr_str}", depth=1)
         for key, value in (params or {}).items():
             self._kv(key, _fmt(value), depth=2)
@@ -89,3 +91,16 @@ def _fmt(value):
     if isinstance(value, float):
         return f"{value:.6g}"
     return str(value)
+
+
+# Inline-attr values are space-delimited on the [NODE …] header line, so any
+# value containing whitespace, '=', ']', or that is empty must be quoted.
+_ATTR_SPECIAL = set(' \t=]"')
+
+
+def _format_attr(value):
+    """Format an inline node attribute, double-quoting when ambiguous."""
+    text = str(value)
+    if text == "" or any(ch in _ATTR_SPECIAL for ch in text):
+        return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return text

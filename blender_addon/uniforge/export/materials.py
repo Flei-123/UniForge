@@ -46,7 +46,7 @@ def _export_node_tree(node_tree, writer, options):
             unif_type,
             node_id,
             attrs=_node_attrs(node, unif_type),
-            params=_node_params(node),
+            params=_node_params(node, unif_type),
         )
 
     connections = [
@@ -111,15 +111,54 @@ def _node_attrs(node, unif_type):
     return attrs
 
 
-def _node_params(node):
+# Curated input sockets per node type (Blender socket names). When a type is
+# listed, ONLY these sockets are exported as params; this trims the dozens of
+# internal/closure sockets (Normal, Tangent, Weight, Coat*, Sheen*, …) that a
+# Blender node exposes but Unity has no use for. Types not listed here fall
+# back to _is_meaningful_param().
+_PARAM_WHITELIST = {
+    "PrincipledBSDF": (
+        "Base Color",
+        "Metallic",
+        "Roughness",
+        "Specular IOR Level",
+        "IOR",
+        "Alpha",
+        "Emission Color",
+        "Emission Strength",
+    ),
+    "Mapping": ("Location", "Rotation", "Scale"),
+}
+
+
+def _node_params(node, unif_type):
     """Unlinked input defaults, keyed by lowercased underscore name."""
+    whitelist = _PARAM_WHITELIST.get(unif_type)
     params = {}
     for socket in node.inputs:
         if socket.is_linked or not hasattr(socket, "default_value"):
             continue
+        if whitelist is not None:
+            if socket.name not in whitelist:
+                continue
+        elif not _is_meaningful_param(socket):
+            continue
         key = socket.name.replace(" ", "_").lower()
         params[key] = _format_value(socket.default_value)
     return params
+
+
+def _is_meaningful_param(socket):
+    """Heuristic for non-whitelisted nodes: drop link-only / internal sockets."""
+    # The closure-mixing "Weight" socket is Blender-internal; Unity ignores it.
+    if socket.name == "Weight":
+        return False
+    value = socket.default_value
+    # A bare 3-component vector input (Vector / Normal / Tangent) is virtually
+    # always meant to be linked; a 0,0,0 default carries no usable information.
+    if hasattr(value, "__len__") and not isinstance(value, str) and len(value) == 3:
+        return False
+    return True
 
 
 def _format_value(value):
