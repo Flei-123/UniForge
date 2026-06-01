@@ -10,13 +10,18 @@ Unlinked input sockets carrying a ``default_value`` are written as node
 parameters so the Unity side can rebuild the graph without the source .blend.
 """
 
+import os
+
 import bpy
 
-from . import node_map
+from . import bake, node_map
 
 
 def export_materials(obj, writer, options):
     """Serialize every material slot of ``obj`` into ``writer``."""
+    output_dir = (
+        os.path.dirname(options.filepath) if getattr(options, "filepath", None) else None
+    )
     for slot_index, slot in enumerate(obj.material_slots):
         material = slot.material
         if material is None:
@@ -27,7 +32,7 @@ def export_materials(obj, writer, options):
 
         writer.begin_material(material.name, slot_index)
         if material.use_nodes and material.node_tree:
-            _export_node_tree(material.node_tree, writer, options)
+            _export_node_tree(material.node_tree, writer, options, obj, output_dir)
         else:
             options.report(
                 {"INFO"},
@@ -37,10 +42,15 @@ def export_materials(obj, writer, options):
 
 
 # --- internals ------------------------------------------------------------
-def _export_node_tree(node_tree, writer, options):
-    ids = _assign_ids(node_tree, options)
+def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
+    ids, baked = _assign_ids(node_tree, options, obj, output_dir)
 
     for node, node_id in ids.items():
+        if node in baked:
+            # The node was baked to a texture; emit it as an Image Texture so
+            # connections referencing its output still resolve on the Unity side.
+            writer.write_node("ImageTexture", node_id, attrs={"path": baked[node]})
+            continue
         unif_type, _status = node_map.lookup(node.bl_idname)
         writer.write_node(
             unif_type,
@@ -65,9 +75,14 @@ def _export_node_tree(node_tree, writer, options):
             )
 
 
-def _assign_ids(node_tree, options):
-    """Map each exportable node to a stable id, warning on the rest."""
+def _assign_ids(node_tree, options, obj=None, output_dir=None):
+    """Map each exportable node to a stable id, baking or skipping the rest.
+
+    Returns ``(ids, baked)`` where ``ids`` maps node -> id and ``baked`` maps a
+    node -> baked PNG basename (a subset of ``ids``).
+    """
     ids = {}
+    baked = {}
     next_id = 0
     for node in node_tree.nodes:
         unif_type, status = node_map.lookup(node.bl_idname)
@@ -81,16 +96,47 @@ def _assign_ids(node_tree, options):
             )
             continue
         if status is node_map.Status.BAKE_ONLY:
-            # TODO(v1.x): bake to a PNG texture when options.bake_unsupported.
-            options.report(
-                {"WARNING"},
-                f"Node '{unif_type}' is bake-only; texture bake not yet implemented.",
-            )
+            filename = _try_bake(node, unif_type, options, obj, output_dir)
+            if filename is None:
+                continue
+            ids[node] = next_id
+            baked[node] = filename
+            next_id += 1
             continue
 
         ids[node] = next_id
         next_id += 1
-    return ids
+    return ids, baked
+
+
+def _try_bake(node, unif_type, options, obj, output_dir):
+    """Bake a bake-only node when enabled; return the PNG basename or None."""
+    if not getattr(options, "bake_unsupported", False) or obj is None or output_dir is None:
+        options.report(
+            {"WARNING"}, f"Node '{unif_type}' is bake-only; not baked (option off)."
+        )
+        return None
+
+    material = _owning_material(node)
+    if material is None:
+        options.report({"WARNING"}, f"Could not resolve material for '{unif_type}'; skipped.")
+        return None
+
+    filename = bake.bake_node_to_texture(obj, material, node, output_dir)
+    if filename:
+        options.report({"INFO"}, f"Baked bake-only node '{unif_type}' to {filename}.")
+    else:
+        options.report({"WARNING"}, f"Could not bake '{unif_type}'; skipped.")
+    return filename
+
+
+def _owning_material(node):
+    """Resolve the Material that owns ``node`` from its node tree."""
+    tree = node.id_data  # ShaderNodeTree
+    for mat in bpy.data.materials:
+        if mat.use_nodes and mat.node_tree is tree:
+            return mat
+    return None
 
 
 def _socket_name(socket):
