@@ -49,9 +49,18 @@ def _build_scene():
 
     tex = tree.nodes.new("ShaderNodeTexImage")
     image = bpy.data.images.new("tiles_diffuse", 4, 4)
-    image.filepath_raw = "//tiles_diffuse.png"
+    # A path with spaces exercises inline-attribute quoting.
+    image.filepath_raw = "//wet tiles/diffuse 01.png"
     tex.image = image
     tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+
+    # Mapping + Texture Coordinate feeding the texture exercises the Mapping
+    # param whitelist (Location/Rotation/Scale) and connection chaining.
+    mapping = tree.nodes.new("ShaderNodeMapping")
+    mapping.inputs["Scale"].default_value = (2.0, 2.0, 1.0)
+    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
+    tree.links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
+    tree.links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
 
     obj.data.materials.append(mat)
     return obj
