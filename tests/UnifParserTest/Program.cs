@@ -104,6 +104,33 @@ internal static class Program
         Check("connection src socket", c0.SourceSocket == "Color");
         Check("connection dst id", c0.TargetId == 0);
         Check("connection dst socket (underscore preserved)", c0.TargetSocket == "Base_Color");
+
+        RunClassifierAssertions();
+    }
+
+    private static void RunClassifierAssertions()
+    {
+        // Lit-sufficient: Principled + textures + mapping/coord only.
+        var lit = new UnifMaterial { Name = "Lit" };
+        lit.Nodes.Add(new UnifNode { Type = "PrincipledBSDF", Id = 0 });
+        lit.Nodes.Add(new UnifNode { Type = "MaterialOutput", Id = 1 });
+        lit.Nodes.Add(new UnifNode { Type = "ImageTexture", Id = 2 });
+        lit.Nodes.Add(new UnifNode { Type = "Mapping", Id = 3 });
+        lit.Nodes.Add(new UnifNode { Type = "TextureCoordinate", Id = 4 });
+        Check("classifier: lit-sufficient -> no graph",
+            !MaterialClassifier.RequiresShaderGraph(lit, out _));
+
+        // Procedural node forces a graph.
+        var proc = new UnifMaterial { Name = "Proc" };
+        proc.Nodes.Add(new UnifNode { Type = "PrincipledBSDF", Id = 0 });
+        proc.Nodes.Add(new UnifNode { Type = "NoiseTexture", Id = 1 });
+        bool needsGraph = MaterialClassifier.RequiresShaderGraph(proc, out string reason);
+        Check("classifier: procedural -> needs graph", needsGraph);
+        Check("classifier: reason names the node", reason != null && reason.Contains("NoiseTexture"));
+
+        // Empty material is trivially lit-sufficient.
+        Check("classifier: empty -> no graph",
+            !MaterialClassifier.RequiresShaderGraph(new UnifMaterial(), out _));
     }
 
     private static void Check(string label, bool condition)

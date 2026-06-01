@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="..\..\unity_plugin\com.fleitec.uniforge\Editor\UnifDocument.cs" />
     <Compile Include="..\..\unity_plugin\com.fleitec.uniforge\Editor\UnifParser.cs" />
+    <Compile Include="..\..\unity_plugin\com.fleitec.uniforge\Editor\MaterialClassifier.cs" />
   </ItemGroup>
 
 </Project>
