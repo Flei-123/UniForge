@@ -30,15 +30,15 @@ namespace UniForge
             Mesh mesh = MeshBuilder.Build(doc.Mesh);
             ctx.AddObjectToAsset("mesh", mesh);
 
-            // 13-15. Build Shader Graph + Material.
-            Material material = ShaderGraphBuilder.BuildMaterial(doc.Materials, ctx);
+            // 13-15. Reconstruct one material per slot (ordered by slot index).
+            Material[] materials = ShaderGraphBuilder.BuildMaterials(doc, ctx);
 
             // 16. Build prefab (MeshFilter + MeshRenderer).
-            GameObject prefab = BuildPrefab(doc, mesh, material);
+            GameObject prefab = BuildPrefab(doc, mesh, materials);
             ctx.AddObjectToAsset("prefab", prefab);
             ctx.SetMainObject(prefab);
 
-            // 17. TODO: import report (unsupported-node warnings).
+            // 17. Per-node warnings are emitted by ShaderGraphBuilder during the build.
         }
 
         private static bool IsVersionSupported(string version)
@@ -47,13 +47,14 @@ namespace UniForge
             return !string.IsNullOrEmpty(version) && version.StartsWith("1.");
         }
 
-        private static GameObject BuildPrefab(UnifDocument doc, Mesh mesh, Material material)
+        private static GameObject BuildPrefab(UnifDocument doc, Mesh mesh, Material[] materials)
         {
             var go = new GameObject(doc.Mesh != null ? doc.Mesh.Name : "UnifAsset");
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = mesh;
             var renderer = go.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = material;
+            if (materials != null && materials.Length > 0)
+                renderer.sharedMaterials = materials;
             return go;
         }
     }
