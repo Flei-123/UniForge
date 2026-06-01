@@ -13,19 +13,23 @@ bl_info = {
     "category": "Import-Export",
 }
 
-from . import operators, ui
+def _modules():
+    """Modules exposing register()/unregister(), in registration order.
 
-# Modules exposing register()/unregister() helpers, in registration order.
-_modules = (operators, ui)
+    Imported lazily so that bpy-free submodules (e.g. uniforge.unif.writer)
+    stay importable — and unit-testable — outside of Blender.
+    """
+    from . import operators, ui
+    return (operators, ui)
 
 
 def register():
-    for module in _modules:
+    for module in _modules():
         module.register()
 
 
 def unregister():
-    for module in reversed(_modules):
+    for module in reversed(_modules()):
         module.unregister()
 
 
