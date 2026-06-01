@@ -37,6 +37,16 @@ namespace UniForge
 
         private static Material BuildOne(UnifMaterial unifMat, AssetImportContext ctx)
         {
+            // Only reconstruct a custom shader when the node network actually
+            // needs one; otherwise a plain Lit material is sufficient.
+            if (MaterialClassifier.RequiresShaderGraph(unifMat, out string reason))
+            {
+                ctx.LogImportWarning(
+                    $"UniForge: material '{unifMat.Name}' uses {reason} which needs full " +
+                    "Shader Graph reconstruction (not yet generated). A base Lit material " +
+                    "was created as a placeholder.");
+            }
+
             Shader shader = Shader.Find("Universal Render Pipeline/Lit")
                             ?? Shader.Find("Standard");
             var mat = new Material(shader) { name = unifMat.Name ?? "UnifMaterial" };
