@@ -1,0 +1,78 @@
+"""Headless exporter smoke test. Run with:
+
+    blender --background --python tests/blender_export_test.py
+
+Builds a cube + material (Principled BSDF fed by an Image Texture), runs it
+through the UniForge export functions, and prints the resulting .unif.
+"""
+
+import os
+import sys
+import tempfile
+
+_ADDON_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "blender_addon"
+)
+sys.path.insert(0, _ADDON_DIR)
+
+import bpy  # noqa: E402
+
+from uniforge.export import materials as material_export  # noqa: E402
+from uniforge.export import mesh as mesh_export  # noqa: E402
+from uniforge.unif.writer import UnifWriter  # noqa: E402
+
+
+class _Options:
+    """Stand-in for the export operator (carries options + report())."""
+
+    apply_modifiers = True
+    bake_unsupported = True
+    embed_textures = False
+    selection_only = False
+
+    def report(self, level, message):
+        print(f"  report[{'/'.join(level)}]: {message}")
+
+
+def _build_scene():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.mesh.primitive_cube_add(size=2.0)
+    obj = bpy.context.active_object
+    obj.name = "TestCube"
+    obj.location = (1.0, 2.0, 3.0)
+
+    mat = bpy.data.materials.new("WetTile_Mat")
+    mat.use_nodes = True
+    tree = mat.node_tree
+    bsdf = tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Roughness"].default_value = 0.35
+
+    tex = tree.nodes.new("ShaderNodeTexImage")
+    image = bpy.data.images.new("tiles_diffuse", 4, 4)
+    image.filepath_raw = "//tiles_diffuse.png"
+    tex.image = image
+    tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+
+    obj.data.materials.append(mat)
+    return obj
+
+
+def main():
+    obj = _build_scene()
+    options = _Options()
+
+    writer = UnifWriter()
+    writer.write_header("test.blend")
+    mesh_export.export_object(obj, writer, options)
+    material_export.export_materials(obj, writer, options)
+
+    out_path = os.path.join(tempfile.gettempdir(), "uniforge_test.unif")
+    writer.save(out_path)
+
+    print("\n=== .unif output ===")
+    print(writer.render())
+    print(f"=== written to {out_path} ===")
+
+
+if __name__ == "__main__":
+    main()
