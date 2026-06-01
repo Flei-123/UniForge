@@ -1,0 +1,26 @@
+[UNIF]
+  version: 1.0
+  generator: UniForge Blender Addon 1.0
+  source_file: tiles.blend
+
+[MESH]
+  name: FloorTile
+  vertices: [0.5,0.0,0.5, -0.5,0.0,0.5, -0.5,0.0,-0.5, 0.5,0.0,-0.5]
+  faces: [0,1,2, 2,3,0]
+  uvs: [1.0,1.0, 0.0,1.0, 0.0,0.0, 1.0,0.0]
+  normals: [0.0,1.0,0.0, 0.0,1.0,0.0, 0.0,1.0,0.0, 0.0,1.0,0.0]
+
+[TRANSFORM]
+  position: 0.0, 0.0, 0.0
+  rotation: 0.0, 0.0, 0.0
+  scale: 1.0, 1.0, 1.0
+
+[MATERIAL]
+  name: WetTile_Mat
+  slot: 0
+  [NODE PrincipledBSDF id=0]
+    roughness: 0.35
+    metallic: 0.0
+  [NODE ImageTexture id=1 path=tiles_diffuse.png]
+  [CONNECTION]
+    1.Color -> 0.Base_Color
