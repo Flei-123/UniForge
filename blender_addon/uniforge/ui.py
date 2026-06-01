@@ -19,6 +19,15 @@ class UNIFORGE_PT_panel(Panel):
         col = layout.column(align=True)
         col.label(text=f"Scene meshes: {_mesh_count(context)}")
 
+        # Surface an available update right in the workflow panel. Errors from
+        # the silent background check stay in Preferences (shown only after a
+        # manual check) so the panel never nags when offline or pre-release.
+        from .update import ops as update_ops
+
+        result = update_ops._state.get("result")
+        if result and result.get("available"):
+            update_ops.draw_update_status(layout, result)
+
 
 def _mesh_count(context):
     return sum(1 for obj in context.scene.objects if obj.type == "MESH")
