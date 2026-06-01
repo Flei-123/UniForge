@@ -1,0 +1,16 @@
+{
+  "name": "UniForge.Editor",
+  "rootNamespace": "UniForge",
+  "references": [
+    "Unity.ShaderGraph.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
