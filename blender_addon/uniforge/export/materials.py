@@ -2,24 +2,131 @@
 
 For each material slot:
   - Walk the node tree, identify node types via node_map.
-  - Supported nodes  -> serialize to [NODE] blocks.
-  - Unsupported nodes -> bake to PNG (if options.bake_unsupported).
-  - Serialize all connections to [CONNECTION] blocks.
+  - Supported / Partial nodes -> serialize to [NODE] blocks.
+  - Bake-only / unsupported nodes -> skip (bake fallback is a TODO milestone).
+  - Serialize all connections between exported nodes to [CONNECTION].
+
+Unlinked input sockets carrying a ``default_value`` are written as node
+parameters so the Unity side can rebuild the graph without the source .blend.
 """
+
+import bpy
 
 from . import node_map
 
 
 def export_materials(obj, writer, options):
-    """Serialize every material slot of ``obj`` into ``writer``.
+    """Serialize every material slot of ``obj`` into ``writer``."""
+    for slot_index, slot in enumerate(obj.material_slots):
+        material = slot.material
+        if material is None:
+            options.report(
+                {"WARNING"}, f"{obj.name}: material slot {slot_index} is empty; skipped."
+            )
+            continue
 
-    TODO(v1.0):
-      - Iterate obj.material_slots; for each, open a [MATERIAL] block.
-      - Walk material.node_tree.nodes, assign stable ids.
-      - Map node.bl_idname via node_map.lookup(); emit [NODE] blocks.
-      - For BAKE_ONLY / unsupported nodes, bake when enabled.
-      - Walk node_tree.links; emit [CONNECTION] entries.
-    """
-    raise NotImplementedError(
-        "materials.export_materials — implemented in the exporter milestone"
-    )
+        writer.begin_material(material.name, slot_index)
+        if material.use_nodes and material.node_tree:
+            _export_node_tree(material.node_tree, writer, options)
+        else:
+            options.report(
+                {"INFO"},
+                f"{material.name}: no node tree; exported as a bare material.",
+            )
+        writer.end_material()
+
+
+# --- internals ------------------------------------------------------------
+def _export_node_tree(node_tree, writer, options):
+    ids = _assign_ids(node_tree, options)
+
+    for node, node_id in ids.items():
+        unif_type, _status = node_map.lookup(node.bl_idname)
+        writer.write_node(
+            unif_type,
+            node_id,
+            attrs=_node_attrs(node, unif_type),
+            params=_node_params(node),
+        )
+
+    connections = [
+        link
+        for link in node_tree.links
+        if link.from_node in ids and link.to_node in ids
+    ]
+    if connections:
+        writer.begin_connections()
+        for link in connections:
+            writer.write_connection(
+                ids[link.from_node],
+                _socket_name(link.from_socket),
+                ids[link.to_node],
+                _socket_name(link.to_socket),
+            )
+
+
+def _assign_ids(node_tree, options):
+    """Map each exportable node to a stable id, warning on the rest."""
+    ids = {}
+    next_id = 0
+    for node in node_tree.nodes:
+        unif_type, status = node_map.lookup(node.bl_idname)
+
+        if unif_type is None:
+            options.report({"WARNING"}, f"Unknown node '{node.bl_idname}' skipped.")
+            continue
+        if status is node_map.Status.NOT_SUPPORTED:
+            options.report(
+                {"WARNING"}, f"Node '{unif_type}' is not supported in v1.0; skipped."
+            )
+            continue
+        if status is node_map.Status.BAKE_ONLY:
+            # TODO(v1.x): bake to a PNG texture when options.bake_unsupported.
+            options.report(
+                {"WARNING"},
+                f"Node '{unif_type}' is bake-only; texture bake not yet implemented.",
+            )
+            continue
+
+        ids[node] = next_id
+        next_id += 1
+    return ids
+
+
+def _socket_name(socket):
+    """Normalize a Blender socket name to the .unif convention (spaces -> '_')."""
+    return socket.name.replace(" ", "_")
+
+
+def _node_attrs(node, unif_type):
+    """Inline header attributes for a node (e.g. image path)."""
+    attrs = {}
+    if unif_type == "ImageTexture":
+        image = getattr(node, "image", None)
+        if image is not None:
+            path = image.filepath_raw or image.filepath or image.name
+            # bpy.path.basename understands Blender's "//" relative prefix;
+            # os.path.basename mangles it into a UNC root on Windows.
+            attrs["path"] = bpy.path.basename(path)
+    return attrs
+
+
+def _node_params(node):
+    """Unlinked input defaults, keyed by lowercased underscore name."""
+    params = {}
+    for socket in node.inputs:
+        if socket.is_linked or not hasattr(socket, "default_value"):
+            continue
+        key = socket.name.replace(" ", "_").lower()
+        params[key] = _format_value(socket.default_value)
+    return params
+
+
+def _format_value(value):
+    """Coerce a socket default into a writer-friendly scalar or string."""
+    # Color / vector sockets expose an indexable bpy_prop_array.
+    if hasattr(value, "__len__") and not isinstance(value, str):
+        return ",".join(f"{float(v):.6g}" for v in value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return value
