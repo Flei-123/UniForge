@@ -64,6 +64,7 @@ namespace UniForge
             var mapped = new HashSet<int> { bsdf.Id };
 
             ApplyScalarParams(mat, bsdf);
+            ApplyTransparency(mat, bsdf);
             ApplyEmission(mat, bsdf);
             ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, mapped);
             ApplyNormalTexture(mat, unifMat, bsdf, ctx, mapped);
@@ -75,11 +76,14 @@ namespace UniForge
         // --- parameter mapping ------------------------------------------------
         private static void ApplyScalarParams(Material mat, UnifNode bsdf)
         {
-            if (TryColor(bsdf, "base_color", out Color baseColor))
-            {
-                SetColor(mat, "_BaseColor", baseColor);
-                SetColor(mat, "_Color", baseColor); // Built-in Standard
-            }
+            TryColor(bsdf, "base_color", out Color baseColor);
+            // Blender transparency comes from the Principled 'Alpha' input, not
+            // the base-color alpha channel — fold it into the material color.
+            if (TryFloat(bsdf, "alpha", out float alpha))
+                baseColor.a = alpha;
+            SetColor(mat, "_BaseColor", baseColor);
+            SetColor(mat, "_Color", baseColor); // Built-in Standard
+
             if (TryFloat(bsdf, "metallic", out float metallic))
                 SetFloat(mat, "_Metallic", metallic);
             if (TryFloat(bsdf, "roughness", out float roughness))
@@ -89,6 +93,45 @@ namespace UniForge
                 SetFloat(mat, "_Smoothness", smoothness);
                 SetFloat(mat, "_Glossiness", smoothness); // Built-in Standard
             }
+        }
+
+        private static void ApplyTransparency(Material mat, UnifNode bsdf)
+        {
+            // Alpha defaults to 1 (fully opaque); only switch surface mode when
+            // the material is actually see-through.
+            if (!TryFloat(bsdf, "alpha", out float alpha) || alpha >= 1f)
+                return;
+
+            float srcAlpha = (float)UnityEngine.Rendering.BlendMode.SrcAlpha;
+            float oneMinusSrcAlpha = (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha;
+            int transparentQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            if (mat.HasProperty("_Surface"))
+            {
+                // URP Lit transparent setup (mirrors URP's own ShaderGUI).
+                mat.SetFloat("_Surface", 1f); // 0 = Opaque, 1 = Transparent
+                mat.SetFloat("_Blend", 0f);   // Alpha blend
+                mat.SetFloat("_SrcBlend", srcAlpha);
+                mat.SetFloat("_DstBlend", oneMinusSrcAlpha);
+                mat.SetFloat("_ZWrite", 0f);
+                mat.SetFloat("_AlphaClip", 0f);
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                mat.DisableKeyword("_ALPHATEST_ON");
+                mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            }
+            else
+            {
+                // Built-in Standard transparent (_Mode = 3 = Transparent).
+                if (mat.HasProperty("_Mode"))
+                    mat.SetFloat("_Mode", 3f);
+                mat.SetFloat("_SrcBlend", srcAlpha);
+                mat.SetFloat("_DstBlend", oneMinusSrcAlpha);
+                mat.SetFloat("_ZWrite", 0f);
+                mat.DisableKeyword("_ALPHATEST_ON");
+                mat.EnableKeyword("_ALPHABLEND_ON");
+                mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            }
+            mat.renderQueue = transparentQueue;
         }
 
         private static void ApplyEmission(Material mat, UnifNode bsdf)
