@@ -13,15 +13,19 @@ venv/
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
+[Bb]in/
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
 [Uu]serSettings/
-*.csproj
 *.sln
 *.user
 *.unitypackage
 .vs/
+
+# Unity auto-generates .csproj; keep our hand-written test project.
+*.csproj
+!tests/**/*.csproj
 
 # OS / editor
 .DS_Store
