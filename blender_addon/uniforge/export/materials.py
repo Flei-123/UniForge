@@ -304,12 +304,50 @@ def _node_attrs(node, unif_type, output_dir=None, options=None, writer=None):
             # os.path.basename mangles it into a UNC root on Windows.
             basename = bpy.path.basename(raw or image.name)
             attrs["path"] = basename
-            src = bpy.path.abspath(raw) if raw else None
-            if getattr(options, "embed_textures", False) and writer is not None and src:
-                _embed_file(writer, src, basename)
-            elif output_dir and src:
-                _copy_texture(src, output_dir, basename)
+            if getattr(options, "embed_textures", False) and writer is not None:
+                _embed_image(writer, image, basename)
+            elif output_dir:
+                src = bpy.path.abspath(raw) if raw else None
+                if src:
+                    _copy_texture(src, output_dir, basename)
     return attrs
+
+
+def _embed_image(writer, image, basename):
+    """Embed an image datablock: prefer packed bytes, then a disk file, then a
+    temporary PNG export (covers generated/edited images)."""
+    fmt = os.path.splitext(basename)[1].lstrip(".").lower() or "png"
+
+    packed = getattr(image, "packed_file", None)
+    if packed is not None and packed.data:
+        writer.queue_embedded(basename, fmt, bytes(packed.data))
+        return True
+
+    raw = image.filepath_raw or image.filepath
+    src = bpy.path.abspath(raw) if raw else None
+    if src and os.path.isfile(src):
+        return _embed_file(writer, src, basename)
+
+    # Fallback: render the image to a temporary PNG and embed that.
+    import tempfile
+
+    tmp = os.path.join(tempfile.gettempdir(), "uniforge_emb_" + basename)
+    if not tmp.lower().endswith(".png"):
+        tmp += ".png"
+    prev_path, prev_fmt = image.filepath_raw, image.file_format
+    try:
+        image.filepath_raw = tmp
+        image.file_format = "PNG"
+        image.save()
+        return _embed_file(writer, tmp, basename)
+    except (RuntimeError, OSError):
+        return False
+    finally:
+        image.filepath_raw, image.file_format = prev_path, prev_fmt
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 def _copy_texture(src, output_dir, basename):

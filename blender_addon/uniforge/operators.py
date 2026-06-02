@@ -43,6 +43,14 @@ _EXPORT_PROPS = {
         ),
         default=False,
     ),
+    "recalc_normals": BoolProperty(
+        name="Recalculate Normals",
+        description=(
+            "Recompute outward-facing normals on the exported mesh "
+            "(non-destructive; fixes inverted/inconsistent faces)"
+        ),
+        default=False,
+    ),
 }
 
 
@@ -64,6 +72,7 @@ def _run_export(operator, context):
     writer.write_header(source_file=bpy.path.basename(bpy.data.filepath))
 
     for obj in meshes:
+        writer.begin_object(obj.name)
         # Smart-UV-project (temporarily) so baked textures map cleanly; the
         # same active UV layer feeds both mesh export and baking.
         restore_uv = mesh_export.apply_smart_uv(obj) if operator.smart_uv else None
@@ -94,6 +103,7 @@ class UNIFORGE_OT_export(Operator, ExportHelper):
     bake_unsupported: _EXPORT_PROPS["bake_unsupported"]
     apply_modifiers: _EXPORT_PROPS["apply_modifiers"]
     smart_uv: _EXPORT_PROPS["smart_uv"]
+    recalc_normals: _EXPORT_PROPS["recalc_normals"]
     coordinate_system: EnumProperty(
         name="Coordinate System",
         description="Target coordinate system",
@@ -121,6 +131,7 @@ class UNIFORGE_OT_export_to_unity(Operator):
     bake_unsupported: _EXPORT_PROPS["bake_unsupported"]
     apply_modifiers: _EXPORT_PROPS["apply_modifiers"]
     smart_uv: _EXPORT_PROPS["smart_uv"]
+    recalc_normals: _EXPORT_PROPS["recalc_normals"]
 
     # Set by execute() before running the shared pipeline.
     filepath: StringProperty(subtype="FILE_PATH", options={"HIDDEN"})
@@ -128,9 +139,10 @@ class UNIFORGE_OT_export_to_unity(Operator):
     def execute(self, context):
         prefs = preferences.get_prefs(context)
         folder = bpy.path.abspath(prefs.unity_assets_path) if prefs else ""
-        # The N-Panel toggle lives in preferences for the one-click path.
+        # The N-Panel toggles live in preferences for the one-click path.
         if prefs is not None:
             self.smart_uv = prefs.auto_smart_uv
+            self.recalc_normals = prefs.auto_recalc_normals
         if not folder or not folder.strip():
             self.report(
                 {"ERROR"},

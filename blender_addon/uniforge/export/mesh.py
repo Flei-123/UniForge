@@ -16,6 +16,7 @@ later optimization (see docs/ROADMAP.md).
 
 import math
 
+import bmesh
 import bpy
 
 
@@ -23,6 +24,8 @@ def export_object(obj, writer, options):
     """Serialize ``obj``'s geometry and transform into ``writer``."""
     mesh, owner = _evaluated_mesh(obj, options)
     try:
+        if getattr(options, "recalc_normals", False):
+            _recalc_normals(mesh)
         vertices, faces, uvs, normals, submeshes = _extract_geometry(mesh)
     finally:
         owner.to_mesh_clear()
@@ -90,6 +93,18 @@ def _evaluated_mesh(obj, options):
     else:
         owner = obj
     return owner.to_mesh(), owner
+
+
+def _recalc_normals(mesh):
+    """Recompute outward-facing face normals on the (temporary) export mesh.
+
+    Operates on the to_mesh() copy, so the user's original mesh is untouched.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(mesh)
+    bm.free()
 
 
 def _extract_geometry(mesh):

@@ -44,12 +44,19 @@ Each block holds key-value pairs (`key: value`) or nested sub-blocks.
 | Block                  | Cardinality | Purpose                                            |
 |------------------------|-------------|----------------------------------------------------|
 | `[UNIF]`               | once        | Header: format version, generator, source file.    |
-| `[MESH]`               | per object  | Geometry: vertices, faces, uvs, normals.           |
+| `[OBJECT name=…]`      | per object  | Groups the mesh/transform/materials of one object. |
+| `[MESH]`               | per object  | Geometry: vertices, faces, uvs, normals, submeshes.|
 | `[TRANSFORM]`          | per object  | position / rotation / scale (Unity Y-up space).    |
 | `[MATERIAL]`           | per slot    | Material name + slot index, contains NODE blocks.  |
 | `[NODE <Type> id=N …]` | per node    | One shader node. Inline attrs + key-value params.  |
 | `[CONNECTION]`         | per material| Edges: `srcId.Socket -> dstId.Socket`.             |
 | `[TEXTURE_EMBEDDED]`   | optional    | Base64-encoded texture for self-contained files.   |
+
+A file may contain multiple `[OBJECT]` blocks; each owns the `[MESH]` /
+`[TRANSFORM]` / `[MATERIAL]` blocks that follow it until the next `[OBJECT]`.
+Files with no `[OBJECT]` block are treated as one implicit object (legacy
+single-object form). `[MESH]` may carry a `submeshes: [c0,c1,…]` triangle-count
+list (faces are ordered by material slot) for multi-material meshes.
 
 ### `[NODE]` syntax
 
