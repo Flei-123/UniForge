@@ -9,7 +9,7 @@ namespace UniForge
     /// folder is parsed and turned into Mesh, Shader Graph, Material, and
     /// Prefab sub-assets (spec §5.2 / §5.3).
     /// </summary>
-    [ScriptedImporter(version: 5, ext: "unif")]
+    [ScriptedImporter(version: 6, ext: "unif")]
     public class UnifImporter : ScriptedImporter
     {
         public const string SupportedFormatVersion = "1.0";
@@ -26,37 +26,63 @@ namespace UniForge
                     $"(importer supports {SupportedFormatVersion}).");
             }
 
-            // 12. Build mesh.
-            Mesh mesh = MeshBuilder.Build(doc.Mesh);
-            ctx.AddObjectToAsset("mesh", mesh);
+            // Build a child GameObject per exported object under one root, so
+            // multi-object .unif files import as a single prefab hierarchy.
+            string rootName = string.IsNullOrEmpty(doc.SourceFile)
+                ? "UnifAsset"
+                : System.IO.Path.GetFileNameWithoutExtension(doc.SourceFile);
+            var root = new GameObject(rootName);
 
-            // 13-15. Reconstruct one material per slot, sized to the mesh's
-            // submesh count so the renderer's material list lines up.
-            Material[] materials = ShaderGraphBuilder.BuildMaterials(doc, ctx, mesh.subMeshCount);
+            // Textures are shared across the whole file (one sub-asset each).
+            var textureCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
 
-            // 16. Build prefab (MeshFilter + MeshRenderer).
-            GameObject prefab = BuildPrefab(doc, mesh, materials);
-            ctx.AddObjectToAsset("prefab", prefab);
-            ctx.SetMainObject(prefab);
+            for (int i = 0; i < doc.Objects.Count; i++)
+            {
+                UnifObject obj = doc.Objects[i];
+                if (obj.Mesh == null)
+                    continue;
 
-            // 17. Per-node warnings are emitted by ShaderGraphBuilder during the build.
+                Mesh mesh = MeshBuilder.Build(obj.Mesh);
+                ctx.AddObjectToAsset($"mesh_{i}", mesh);
+
+                Material[] materials = ShaderGraphBuilder.BuildMaterials(
+                    obj.Materials, doc, ctx, mesh.subMeshCount, textureCache, $"o{i}_");
+
+                var child = new GameObject(obj.Mesh.Name ?? $"Object_{i}");
+                child.transform.SetParent(root.transform, worldPositionStays: false);
+                ApplyTransform(child.transform, obj.Transform);
+
+                var filter = child.AddComponent<MeshFilter>();
+                filter.sharedMesh = mesh;
+                var renderer = child.AddComponent<MeshRenderer>();
+                if (materials != null && materials.Length > 0)
+                    renderer.sharedMaterials = materials;
+            }
+
+            ctx.AddObjectToAsset("prefab", root);
+            ctx.SetMainObject(root);
+        }
+
+        private static void ApplyTransform(Transform transform, UnifTransform t)
+        {
+            if (t == null)
+                return;
+            transform.localPosition = ToVector3(t.Position, Vector3.zero);
+            transform.localEulerAngles = ToVector3(t.Rotation, Vector3.zero);
+            transform.localScale = ToVector3(t.Scale, Vector3.one);
+        }
+
+        private static Vector3 ToVector3(float[] v, Vector3 fallback)
+        {
+            if (v == null || v.Length < 3)
+                return fallback;
+            return new Vector3(v[0], v[1], v[2]);
         }
 
         private static bool IsVersionSupported(string version)
         {
             // v1.x is forward-tolerant; reject 2.x+.
             return !string.IsNullOrEmpty(version) && version.StartsWith("1.");
-        }
-
-        private static GameObject BuildPrefab(UnifDocument doc, Mesh mesh, Material[] materials)
-        {
-            var go = new GameObject(doc.Mesh != null ? doc.Mesh.Name : "UnifAsset");
-            var filter = go.AddComponent<MeshFilter>();
-            filter.sharedMesh = mesh;
-            var renderer = go.AddComponent<MeshRenderer>();
-            if (materials != null && materials.Length > 0)
-                renderer.sharedMaterials = materials;
-            return go;
         }
     }
 }

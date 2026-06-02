@@ -9,14 +9,32 @@ namespace UniForge
         public string Generator;
         public string SourceFile;
 
+        // One entry per exported object (an [OBJECT] block, or a single implicit
+        // object for legacy single-object files).
+        public readonly List<UnifObject> Objects = new List<UnifObject>();
+
+        // Base64-decoded textures embedded in the file, keyed by their name
+        // (which matches an Image Texture node's "path" attribute). Shared
+        // across all objects.
+        public readonly Dictionary<string, byte[]> EmbeddedTextures =
+            new Dictionary<string, byte[]>();
+
+        // Convenience accessors for the first object (back-compat / single-object).
+        public UnifMesh Mesh => Objects.Count > 0 ? Objects[0].Mesh : null;
+        public UnifTransform Transform => Objects.Count > 0 ? Objects[0].Transform : null;
+        public List<UnifMaterial> Materials =>
+            Objects.Count > 0 ? Objects[0].Materials : _noMaterials;
+
+        private static readonly List<UnifMaterial> _noMaterials = new List<UnifMaterial>();
+    }
+
+    /// <summary>A single exported object: geometry + transform + materials.</summary>
+    public class UnifObject
+    {
+        public string Name;
         public UnifMesh Mesh;
         public UnifTransform Transform;
         public readonly List<UnifMaterial> Materials = new List<UnifMaterial>();
-
-        // Base64-decoded textures embedded in the file, keyed by their name
-        // (which matches an Image Texture node's "path" attribute).
-        public readonly Dictionary<string, byte[]> EmbeddedTextures =
-            new Dictionary<string, byte[]>();
     }
 
     public class UnifMesh

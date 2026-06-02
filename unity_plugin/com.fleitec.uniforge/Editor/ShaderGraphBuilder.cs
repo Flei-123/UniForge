@@ -25,19 +25,18 @@ namespace UniForge
         /// each material placed at its slot index so it lines up with the mesh's
         /// submeshes (gaps stay null). Sub-asset ids are unique per material.
         /// </summary>
-        public static Material[] BuildMaterials(UnifDocument doc, AssetImportContext ctx, int subMeshCount)
+        public static Material[] BuildMaterials(
+            List<UnifMaterial> sourceMaterials, UnifDocument doc, AssetImportContext ctx,
+            int subMeshCount, Dictionary<string, Texture2D> textureCache, string idPrefix)
         {
             int count = Mathf.Max(subMeshCount, 1);
             var materials = new Material[count];
-            // Cache decoded/loaded textures by path so a texture shared across
-            // inputs/materials is only created (and added as a sub-asset) once.
-            var textureCache = new Dictionary<string, Texture2D>();
 
-            for (int i = 0; i < doc.Materials.Count; i++)
+            for (int i = 0; i < sourceMaterials.Count; i++)
             {
-                UnifMaterial unifMat = doc.Materials[i];
+                UnifMaterial unifMat = sourceMaterials[i];
                 Material mat = BuildOne(unifMat, ctx, doc, textureCache);
-                ctx.AddObjectToAsset($"material_{i}", mat); // unique by index
+                ctx.AddObjectToAsset($"{idPrefix}material_{i}", mat); // unique across objects
                 int slot = Mathf.Clamp(unifMat.Slot, 0, count - 1);
                 materials[slot] = mat;
             }
