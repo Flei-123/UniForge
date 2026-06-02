@@ -23,9 +23,10 @@ namespace UniForge
     {
         public string Name;
         public float[] Vertices; // flat xyz triples (Unity Y-up space)
-        public int[] Faces;      // flat triangle index triples
+        public int[] Faces;      // flat triangle index triples, ordered by submesh
         public float[] Uvs;      // flat uv pairs
         public float[] Normals;  // flat xyz triples
+        public int[] Submeshes;  // triangle count per material slot (null = single submesh)
     }
 
     public class UnifTransform
