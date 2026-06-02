@@ -35,6 +35,14 @@ _EXPORT_PROPS = {
         description="Apply all modifiers before exporting the mesh",
         default=True,
     ),
+    "smart_uv": BoolProperty(
+        name="Smart UV Unwrap",
+        description=(
+            "Re-unwrap with Smart UV Project before baking (non-destructive). "
+            "Recommended for procedural materials so baked textures map cleanly"
+        ),
+        default=False,
+    ),
 }
 
 
@@ -56,8 +64,15 @@ def _run_export(operator, context):
     writer.write_header(source_file=bpy.path.basename(bpy.data.filepath))
 
     for obj in meshes:
-        mesh_export.export_object(obj, writer, options=operator)
-        material_export.export_materials(obj, writer, options=operator)
+        # Smart-UV-project (temporarily) so baked textures map cleanly; the
+        # same active UV layer feeds both mesh export and baking.
+        restore_uv = mesh_export.apply_smart_uv(obj) if operator.smart_uv else None
+        try:
+            mesh_export.export_object(obj, writer, options=operator)
+            material_export.export_materials(obj, writer, options=operator)
+        finally:
+            if restore_uv is not None:
+                restore_uv()
 
     writer.write_embedded()  # no-op unless 'Embed Textures' queued any
     writer.save(operator.filepath)
@@ -78,6 +93,7 @@ class UNIFORGE_OT_export(Operator, ExportHelper):
     embed_textures: _EXPORT_PROPS["embed_textures"]
     bake_unsupported: _EXPORT_PROPS["bake_unsupported"]
     apply_modifiers: _EXPORT_PROPS["apply_modifiers"]
+    smart_uv: _EXPORT_PROPS["smart_uv"]
     coordinate_system: EnumProperty(
         name="Coordinate System",
         description="Target coordinate system",
@@ -104,6 +120,7 @@ class UNIFORGE_OT_export_to_unity(Operator):
     embed_textures: _EXPORT_PROPS["embed_textures"]
     bake_unsupported: _EXPORT_PROPS["bake_unsupported"]
     apply_modifiers: _EXPORT_PROPS["apply_modifiers"]
+    smart_uv: _EXPORT_PROPS["smart_uv"]
 
     # Set by execute() before running the shared pipeline.
     filepath: StringProperty(subtype="FILE_PATH", options={"HIDDEN"})
@@ -111,6 +128,9 @@ class UNIFORGE_OT_export_to_unity(Operator):
     def execute(self, context):
         prefs = preferences.get_prefs(context)
         folder = bpy.path.abspath(prefs.unity_assets_path) if prefs else ""
+        # The N-Panel toggle lives in preferences for the one-click path.
+        if prefs is not None:
+            self.smart_uv = prefs.auto_smart_uv
         if not folder or not folder.strip():
             self.report(
                 {"ERROR"},

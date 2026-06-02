@@ -5,7 +5,7 @@ single home for all UniForge settings (export target + update UI).
 """
 
 import bpy
-from bpy.props import StringProperty
+from bpy.props import BoolProperty, StringProperty
 from bpy.types import AddonPreferences
 
 ADDON_ID = __package__.split(".")[0]  # "uniforge", regardless of submodule depth
@@ -37,12 +37,22 @@ class UNIFORGE_AP_preferences(AddonPreferences):
         default="",
     )
 
+    auto_smart_uv: BoolProperty(
+        name="Smart UV Unwrap before baking",
+        description=(
+            "Re-unwrap with Smart UV Project before baking (non-destructive). "
+            "Recommended for procedural materials so baked textures map cleanly"
+        ),
+        default=False,
+    )
+
     def draw(self, context):
         layout = self.layout
 
         box = layout.box()
         box.label(text="Export to Unity", icon="EXPORT")
         box.prop(self, "unity_assets_path")
+        box.prop(self, "auto_smart_uv")
         box.label(text="One-click export drops the .unif + textures here.")
 
         box = layout.box()
