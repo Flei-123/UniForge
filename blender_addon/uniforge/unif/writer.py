@@ -38,13 +38,16 @@ class UnifWriter:
         self._kv("source_file", source_file or "<unsaved>")
         self._blank()
 
-    def write_mesh(self, name, vertices, faces, uvs, normals):
+    def write_mesh(self, name, vertices, faces, uvs, normals, submeshes=None):
         self._block("MESH")
         self._kv("name", name)
         self._kv("vertices", self._flat(vertices))
         self._kv("faces", self._flat(faces))
         self._kv("uvs", self._flat(uvs))
         self._kv("normals", self._flat(normals))
+        # Per-material-slot triangle counts (faces are ordered by slot).
+        if submeshes and len(submeshes) > 1:
+            self._kv("submeshes", self._flat(submeshes))
         self._blank()
 
     def write_transform(self, position, rotation, scale):

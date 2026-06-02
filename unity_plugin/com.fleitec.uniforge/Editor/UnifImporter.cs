@@ -9,7 +9,7 @@ namespace UniForge
     /// folder is parsed and turned into Mesh, Shader Graph, Material, and
     /// Prefab sub-assets (spec §5.2 / §5.3).
     /// </summary>
-    [ScriptedImporter(version: 4, ext: "unif")]
+    [ScriptedImporter(version: 5, ext: "unif")]
     public class UnifImporter : ScriptedImporter
     {
         public const string SupportedFormatVersion = "1.0";
@@ -30,8 +30,9 @@ namespace UniForge
             Mesh mesh = MeshBuilder.Build(doc.Mesh);
             ctx.AddObjectToAsset("mesh", mesh);
 
-            // 13-15. Reconstruct one material per slot (ordered by slot index).
-            Material[] materials = ShaderGraphBuilder.BuildMaterials(doc, ctx);
+            // 13-15. Reconstruct one material per slot, sized to the mesh's
+            // submesh count so the renderer's material list lines up.
+            Material[] materials = ShaderGraphBuilder.BuildMaterials(doc, ctx, mesh.subMeshCount);
 
             // 16. Build prefab (MeshFilter + MeshRenderer).
             GameObject prefab = BuildPrefab(doc, mesh, materials);

@@ -161,6 +161,7 @@ namespace UniForge
                 case "faces": mesh.Faces = ParseIntArray(value); break;
                 case "uvs": mesh.Uvs = ParseFloatArray(value); break;
                 case "normals": mesh.Normals = ParseFloatArray(value); break;
+                case "submeshes": mesh.Submeshes = ParseIntArray(value); break;
             }
         }
 

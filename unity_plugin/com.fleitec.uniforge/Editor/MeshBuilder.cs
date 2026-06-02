@@ -12,18 +12,49 @@ namespace UniForge
                 throw new ArgumentNullException(nameof(data), "No [MESH] block in .unif file.");
 
             var mesh = new Mesh { name = data.Name ?? "UnifMesh" };
+            if (data.Vertices != null && data.Vertices.Length / 3 > ushort.MaxValue)
+                mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
             mesh.SetVertices(ToVector3Array(data.Vertices));
-            mesh.SetTriangles(data.Faces ?? Array.Empty<int>(), 0);
+            int[] faces = data.Faces ?? Array.Empty<int>();
             if (data.Uvs != null && data.Uvs.Length > 0)
                 mesh.SetUVs(0, ToVector2Array(data.Uvs));
             if (data.Normals != null && data.Normals.Length > 0)
                 mesh.SetNormals(ToVector3Array(data.Normals));
-            else
-                mesh.RecalculateNormals();
 
+            AssignSubmeshes(mesh, faces, data.Submeshes);
+
+            if (data.Normals == null || data.Normals.Length == 0)
+                mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        /// <summary>
+        /// Split the (slot-ordered) triangle list into one submesh per material
+        /// slot. Faces are grouped by slot on export; ``submeshes`` holds the
+        /// triangle count per slot. Falls back to a single submesh.
+        /// </summary>
+        private static void AssignSubmeshes(Mesh mesh, int[] faces, int[] submeshes)
+        {
+            if (submeshes == null || submeshes.Length <= 1)
+            {
+                mesh.subMeshCount = 1;
+                mesh.SetTriangles(faces, 0);
+                return;
+            }
+
+            mesh.subMeshCount = submeshes.Length;
+            int start = 0; // index into the flat faces array
+            for (int slot = 0; slot < submeshes.Length; slot++)
+            {
+                int indexCount = submeshes[slot] * 3;
+                int end = Math.Min(start + indexCount, faces.Length);
+                var slice = new int[Math.Max(0, end - start)];
+                Array.Copy(faces, start, slice, 0, slice.Length);
+                mesh.SetTriangles(slice, slot);
+                start = end;
+            }
         }
 
         private static Vector3[] ToVector3Array(float[] flat)
