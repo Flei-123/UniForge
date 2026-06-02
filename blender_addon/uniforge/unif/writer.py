@@ -49,13 +49,15 @@ class UnifWriter:
             header += f" parent={_format_attr(parent)}"
         self._block(header)
 
-    def write_mesh(self, name, vertices, faces, uvs, normals, submeshes=None):
+    def write_mesh(self, name, vertices, faces, uvs, normals, submeshes=None, colors=None):
         self._block("MESH")
         self._kv("name", name)
         self._kv("vertices", self._flat(vertices))
         self._kv("faces", self._flat(faces))
         self._kv("uvs", self._flat(uvs))
         self._kv("normals", self._flat(normals))
+        if colors:
+            self._kv("colors", self._flat(colors))  # flat RGBA per vertex
         # Per-material-slot triangle counts (faces are ordered by slot).
         if submeshes and len(submeshes) > 1:
             self._kv("submeshes", self._flat(submeshes))

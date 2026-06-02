@@ -79,6 +79,7 @@ namespace UniForge
             ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
             ApplyNormalTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
             ApplyMetallicSmoothnessTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
+            ApplyEmissionTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
 
             WarnUnmappedNodes(unifMat, ctx, mapped);
             return mat;
@@ -231,6 +232,28 @@ namespace UniForge
             mat.EnableKeyword("_METALLICGLOSSMAP");
             if (mat.HasProperty("_SmoothnessTextureChannel"))
                 mat.SetFloat("_SmoothnessTextureChannel", 0f); // 0 = metallic-map alpha
+        }
+
+        private static void ApplyEmissionTexture(
+            Material mat, UnifMaterial unifMat, UnifNode bsdf,
+            AssetImportContext ctx, UnifDocument doc,
+            Dictionary<string, Texture2D> cache, HashSet<int> mapped)
+        {
+            UnifNode src = FindSource(unifMat, bsdf.Id, "Emission_Color");
+            if (src == null || src.Type != "ImageTexture")
+                return;
+
+            Texture2D tex = LoadTexture(src, ctx, doc, cache);
+            mapped.Add(src.Id);
+            if (tex == null)
+                return;
+
+            if (mat.HasProperty("_EmissionMap"))
+                mat.SetTexture("_EmissionMap", tex);
+            if (mat.HasProperty("_EmissionColor"))
+                mat.SetColor("_EmissionColor", Color.white);
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags &= ~MaterialGlobalIlluminationFlags.EmissiveIsBlack;
         }
 
         private static Texture2D LoadTexture(

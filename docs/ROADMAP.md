@@ -23,9 +23,23 @@
 - [~] Mesh / Material / Prefab generation. *(implemented; Shader Graph asset generation only for complex graphs — see below; untested in Unity)*
 - [ ] URP + HDRP verified on Unity 2021.3 LTS and Unity 6.
 
-## Bonus (beyond original v1.0 scope)
+## Bonus (delivered beyond original v1.0 scope)
 
 - [x] In-addon updater (GitHub Releases, one-click install).
-- [ ] Full Shader Graph *asset* generation for procedural node networks
-      (Lit material used when sufficient).
-- [ ] Material browser (Poly Haven / ambientCG, CC0) — future.
+- [x] One-click "Export to Unity" to a configured folder.
+- [x] Embedded textures (self-contained .unif).
+- [x] Multi-object export + Blender parent hierarchy (incl. empties).
+- [x] Multi-material submeshes.
+- [x] Procedural baking: Base Color, Metallic/Smoothness (packed), Emission.
+- [x] Vertex colors.
+- [x] Smart UV unwrap & recalculate normals options.
+- [x] UniForge importer inspector (counts + texture list).
+
+## Still open
+
+- [ ] Full Shader Graph *asset* generation (Lit + baking used instead).
+- [ ] Material browser (Poly Haven / ambientCG, CC0).
+- [ ] Procedural Normal-map baking (needs tangent-space bake, not EMIT).
+- [ ] Rotation handedness round-trip verification.
+- [ ] Lights / cameras export; multiple UV maps; tangents.
+- [ ] HDRP verification; animations / armatures (v1.5).
