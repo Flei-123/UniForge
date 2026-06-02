@@ -35,10 +35,12 @@
 - [x] Smart UV unwrap & recalculate normals options.
 - [x] UniForge importer inspector (counts + texture list).
 
+- [x] Material browser (ambientCG, CC0): search + download + apply.
+
 ## Still open
 
 - [ ] Full Shader Graph *asset* generation (Lit + baking used instead).
-- [ ] Material browser (Poly Haven / ambientCG, CC0).
+- [ ] Material browser thumbnails / Poly Haven source.
 - [ ] Procedural Normal-map baking (needs tangent-space bake, not EMIT).
 - [ ] Rotation handedness round-trip verification.
 - [ ] Lights / cameras export; multiple UV maps; tangents.

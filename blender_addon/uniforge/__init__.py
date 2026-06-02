@@ -20,9 +20,10 @@ def _modules():
     stay importable — and unit-testable — outside of Blender.
     """
     from . import operators, preferences, ui
+    from .browser import ops as browser_ops
     from .update import ops as update_ops
 
-    return (preferences, operators, ui, update_ops)
+    return (preferences, operators, ui, update_ops, browser_ops)
 
 
 def register():
