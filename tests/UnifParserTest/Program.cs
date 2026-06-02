@@ -141,6 +141,13 @@ internal static class Program
         Check("multi: second object (quoted name mesh)", doc.Objects[1].Mesh?.Name == "BoxB");
         Check("multi: doc.Mesh back-compat = first", doc.Mesh?.Name == "BoxA");
 
+        // Vertex colors + empty (mesh-less) object.
+        UnifDocument cv = UnifParser.Parse(
+            "[OBJECT name=E]\n  [TRANSFORM]\n    position: 0,0,0\n" +
+            "[OBJECT name=M parent=E]\n  [MESH]\n    name: M\n    faces: [0,1,2]\n    colors: [1,0,0,1, 0,1,0,1]\n");
+        Check("colors: parsed", cv.Objects[1].Mesh?.Colors != null && cv.Objects[1].Mesh.Colors.Length == 8);
+        Check("empty: mesh-less object kept", cv.Objects[0].Mesh == null && cv.Objects[0].Name == "E");
+
         // Legacy single-object (no [OBJECT]) still parses into one implicit object.
         UnifDocument legacy = UnifParser.Parse("[MESH]\n  name: Solo\n  faces: [0,1,2]\n");
         Check("legacy: implicit single object", legacy.Objects.Count == 1

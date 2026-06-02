@@ -26,11 +26,16 @@ def export_object(obj, writer, options, parent=None):
     try:
         if getattr(options, "recalc_normals", False):
             _recalc_normals(mesh)
-        vertices, faces, uvs, normals, submeshes = _extract_geometry(mesh)
+        vertices, faces, uvs, normals, colors, submeshes = _extract_geometry(mesh)
     finally:
         owner.to_mesh_clear()
 
-    writer.write_mesh(obj.name, vertices, faces, uvs, normals, submeshes)
+    writer.write_mesh(obj.name, vertices, faces, uvs, normals, submeshes, colors)
+    _write_transform(obj, writer, parent)
+
+
+def export_transform_only(obj, writer, parent=None):
+    """Emit just the [TRANSFORM] for a non-mesh object (e.g. an empty parent)."""
     _write_transform(obj, writer, parent)
 
 
@@ -122,6 +127,10 @@ def _extract_geometry(mesh):
     uv_data = mesh.uv_layers.active.data if mesh.uv_layers.active else None
     slot_count = max(len(mesh.materials), 1)
 
+    color_attr = getattr(mesh, "color_attributes", None)
+    color_attr = color_attr.active_color if color_attr else None
+    color_corner = color_attr is not None and color_attr.domain == "CORNER"
+
     triangles_by_slot = [[] for _ in range(slot_count)]
     for tri in mesh.loop_triangles:
         slot_index = min(tri.material_index, slot_count - 1)
@@ -130,6 +139,7 @@ def _extract_geometry(mesh):
     vertices = []
     normals = []
     uvs = []
+    colors = []
     faces = []
     submeshes = []
     corner = 0
@@ -139,7 +149,8 @@ def _extract_geometry(mesh):
             corners = []
             for slot in range(3):
                 loop_index = tri.loops[slot]
-                co = mesh.vertices[tri.vertices[slot]].co
+                vertex_index = tri.vertices[slot]
+                co = mesh.vertices[vertex_index].co
                 no = tri.split_normals[slot]
 
                 vertices.extend(blender_to_unity_vector(co))
@@ -149,6 +160,9 @@ def _extract_geometry(mesh):
                     uvs.extend((uv[0], uv[1]))
                 else:
                     uvs.extend((0.0, 0.0))
+                if color_attr is not None:
+                    col = color_attr.data[loop_index if color_corner else vertex_index].color
+                    colors.extend((col[0], col[1], col[2], col[3]))
 
                 corners.append(corner)
                 corner += 1
@@ -158,7 +172,7 @@ def _extract_geometry(mesh):
             faces.extend((corners[0], corners[2], corners[1]))
         submeshes.append(len(slot_triangles))
 
-    return vertices, faces, uvs, normals, submeshes
+    return vertices, faces, uvs, normals, colors, submeshes
 
 
 def _write_transform(obj, writer, parent=None):

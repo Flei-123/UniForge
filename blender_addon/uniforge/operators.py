@@ -71,24 +71,39 @@ def _run_export(operator, context):
     writer = UnifWriter(generator="UniForge Blender Addon 1.0")
     writer.write_header(source_file=bpy.path.basename(bpy.data.filepath))
 
-    mesh_set = set(meshes)
-    for obj in meshes:
-        # Preserve Blender's parent hierarchy when the parent is also exported.
-        parent = obj.parent if obj.parent in mesh_set else None
+    # Include parent chains (e.g. empties) as transform-only objects so the
+    # hierarchy survives even when a mesh is parented to a non-mesh object.
+    scene_objects = set(context.scene.objects)
+    export_set = set(meshes)
+    for mesh_obj in meshes:
+        ancestor = mesh_obj.parent
+        while ancestor is not None and ancestor in scene_objects and ancestor not in export_set:
+            export_set.add(ancestor)
+            ancestor = ancestor.parent
+
+    # Keep scene order; the importer resolves parents by name regardless.
+    export_list = [obj for obj in context.scene.objects if obj in export_set]
+    for obj in export_list:
+        parent = obj.parent if obj.parent in export_set else None
         writer.begin_object(obj.name, parent.name if parent else None)
-        # Smart-UV-project (temporarily) so baked textures map cleanly; the
-        # same active UV layer feeds both mesh export and baking.
-        restore_uv = mesh_export.apply_smart_uv(obj) if operator.smart_uv else None
-        try:
-            mesh_export.export_object(obj, writer, options=operator, parent=parent)
-            material_export.export_materials(obj, writer, options=operator)
-        finally:
-            if restore_uv is not None:
-                restore_uv()
+
+        if obj.type == "MESH" and obj.material_slots:
+            # Smart-UV-project (temporarily) so baked textures map cleanly; the
+            # same active UV layer feeds both mesh export and baking.
+            restore_uv = mesh_export.apply_smart_uv(obj) if operator.smart_uv else None
+            try:
+                mesh_export.export_object(obj, writer, options=operator, parent=parent)
+                material_export.export_materials(obj, writer, options=operator)
+            finally:
+                if restore_uv is not None:
+                    restore_uv()
+        else:
+            # Empty / non-mesh parent: transform only, so children keep their place.
+            mesh_export.export_transform_only(obj, writer, parent=parent)
 
     writer.write_embedded()  # no-op unless 'Embed Textures' queued any
     writer.save(operator.filepath)
-    return len(meshes)
+    return len(export_list)
 
 
 class UNIFORGE_OT_export(Operator, ExportHelper):
