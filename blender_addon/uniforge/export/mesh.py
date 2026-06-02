@@ -37,6 +37,46 @@ def blender_to_unity_vector(vec):
     return (x, z, y)
 
 
+def apply_smart_uv(obj):
+    """Smart-UV-project into a temporary, active UV layer; return a restore().
+
+    Baking writes into the active UV layer, so a clean projection here makes
+    baked textures map cleanly in Unity. Non-destructive: the original UV
+    layers and active selection are restored by the returned callback.
+    """
+    mesh = obj.data
+    prev_active_index = mesh.uv_layers.active_index if mesh.uv_layers else -1
+
+    temp = mesh.uv_layers.new(name="UniForge_Bake")
+    mesh.uv_layers.active = temp
+
+    view_layer = bpy.context.view_layer
+    prev_active = view_layer.objects.active
+    prev_selected = list(bpy.context.selected_objects)
+    for selected in prev_selected:
+        selected.select_set(False)
+    obj.select_set(True)
+    view_layer.objects.active = obj
+
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(island_margin=0.02)
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+    def restore():
+        layer = mesh.uv_layers.get("UniForge_Bake")
+        if layer is not None:
+            mesh.uv_layers.remove(layer)
+        if 0 <= prev_active_index < len(mesh.uv_layers):
+            mesh.uv_layers.active_index = prev_active_index
+        obj.select_set(False)
+        for selected in prev_selected:
+            selected.select_set(True)
+        view_layer.objects.active = prev_active
+
+    return restore
+
+
 # --- internals ------------------------------------------------------------
 def _evaluated_mesh(obj, options):
     """Return ``(mesh, owner)``; ``owner.to_mesh_clear()`` frees the temp mesh.
