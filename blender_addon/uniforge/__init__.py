@@ -19,10 +19,10 @@ def _modules():
     Imported lazily so that bpy-free submodules (e.g. uniforge.unif.writer)
     stay importable — and unit-testable — outside of Blender.
     """
-    from . import operators, ui
+    from . import operators, preferences, ui
     from .update import ops as update_ops
 
-    return (operators, ui, update_ops)
+    return (preferences, operators, ui, update_ops)
 
 
 def register():
