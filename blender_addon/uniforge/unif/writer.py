@@ -5,6 +5,8 @@ is deliberately format-only: callers (mesh/materials export) decide *what* to
 write; the writer decides *how* it is laid out on disk.
 """
 
+import base64
+
 FORMAT_VERSION = "1.0"
 _INDENT = "  "
 
@@ -13,6 +15,8 @@ class UnifWriter:
     def __init__(self, generator="UniForge Blender Addon 1.0"):
         self.generator = generator
         self._lines = []
+        # name -> (format, base64-string); deduped, emitted by write_embedded().
+        self._embedded = {}
 
     # --- low-level helpers ------------------------------------------------
     def _block(self, header, depth=0):
@@ -73,6 +77,23 @@ class UnifWriter:
 
     def end_material(self):
         self._blank()
+
+    # --- embedded textures ------------------------------------------------
+    def queue_embedded(self, name, fmt, raw_bytes):
+        """Register a texture to be embedded (deduped by ``name``)."""
+        if name in self._embedded:
+            return
+        self._embedded[name] = (fmt, base64.b64encode(raw_bytes).decode("ascii"))
+
+    def has_embedded(self):
+        return bool(self._embedded)
+
+    def write_embedded(self):
+        """Emit all queued [TEXTURE_EMBEDDED] blocks (call once, before save)."""
+        for name, (fmt, b64) in self._embedded.items():
+            self._block(f"TEXTURE_EMBEDDED name={_format_attr(name)} format={fmt}")
+            self._kv("data", b64)
+            self._blank()
 
     def _blank(self):
         self._lines.append("")

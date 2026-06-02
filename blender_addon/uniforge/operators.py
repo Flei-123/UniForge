@@ -22,8 +22,8 @@ _EXPORT_PROPS = {
     ),
     "embed_textures": BoolProperty(
         name="Embed Textures",
-        description="Base64-encode textures into the .unif file",
-        default=False,
+        description="Base64-encode textures into the .unif file (self-contained, no loose files)",
+        default=True,
     ),
     "bake_unsupported": BoolProperty(
         name="Bake Unsupported Nodes",
@@ -59,6 +59,7 @@ def _run_export(operator, context):
         mesh_export.export_object(obj, writer, options=operator)
         material_export.export_materials(obj, writer, options=operator)
 
+    writer.write_embedded()  # no-op unless 'Embed Textures' queued any
     writer.save(operator.filepath)
     return len(meshes)
 

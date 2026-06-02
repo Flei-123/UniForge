@@ -27,7 +27,7 @@ class _Options:
 
     apply_modifiers = True
     bake_unsupported = True
-    embed_textures = False
+    embed_textures = True  # self-contained .unif: textures Base64-embedded
     selection_only = False
     filepath = ""  # set in main(); the exporter derives the output dir from it
 
@@ -77,18 +77,20 @@ def main():
     mesh_export.export_object(obj, writer, options)
     material_export.export_materials(obj, writer, options)
 
+    writer.write_embedded()  # mirrors operators._run_export
     writer.save(out_path)
 
     print("\n=== .unif output ===")
     print(writer.render())
     print(f"=== written to {out_path} ===")
 
-    # Report any baked textures produced alongside the .unif.
+    # With embedding on: expect [TEXTURE_EMBEDDED] blocks and NO loose PNGs.
     out_dir = os.path.dirname(out_path)
-    baked = [f for f in os.listdir(out_dir) if f.endswith("_baked.png")]
-    for name in baked:
-        size = os.path.getsize(os.path.join(out_dir, name))
-        print(f"=== baked texture: {name} ({size} bytes) ===")
+    rendered = writer.render()
+    embedded_count = rendered.count("[TEXTURE_EMBEDDED")
+    loose_png = [f for f in os.listdir(out_dir) if f.endswith("_baked.png")]
+    print(f"=== embedded blocks: {embedded_count} ===")
+    print(f"=== loose baked PNGs left (expect 0 when embedding): {len(loose_png)} {loose_png} ===")
 
 
 if __name__ == "__main__":

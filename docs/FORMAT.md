@@ -84,9 +84,23 @@ Blender socket during export.
 
 ## Textures
 
-By default textures are referenced by **relative path**. With the *Embed
-Textures* option, each texture is Base64-encoded into a `[TEXTURE_EMBEDDED]`
-block for a single self-contained file (larger size).
+By default textures are referenced by **relative path** (and copied next to the
+`.unif` on export). With the *Embed Textures* option, each texture — including
+baked ones — is Base64-encoded into a `[TEXTURE_EMBEDDED]` block for a single
+self-contained file (larger size, no loose files).
+
+```
+[TEXTURE_EMBEDDED name=tiles_diffuse.png format=png]
+  data: iVBORw0KGgoAAAANSUhEUgAA…
+```
+
+- `name` matches an Image Texture node's `path` attribute (the linkage key);
+  it is quoted when it contains spaces.
+- `format` is the file extension (`png`, `jpg`, …).
+- `data` is the Base64 of the raw image file bytes, on one line.
+
+The importer prefers an embedded texture over a same-named file on disk, and
+registers it as a sub-asset of the imported `.unif`.
 
 ## Coordinate system
 

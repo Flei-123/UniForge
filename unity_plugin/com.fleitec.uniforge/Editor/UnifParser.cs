@@ -32,6 +32,7 @@ namespace UniForge
             UnifMaterial currentMaterial = null;
             UnifNode currentNode = null;
             bool inConnections = false;
+            string pendingEmbeddedName = null; // set by [TEXTURE_EMBEDDED], consumed by its data: line
 
             foreach (string rawLine in text.Split('\n'))
             {
@@ -47,6 +48,7 @@ namespace UniForge
                         continue;
 
                     string kind = tokens[0];
+                    pendingEmbeddedName = null; // any new block ends a pending embed
                     switch (kind)
                     {
                         case "UNIF":
@@ -78,8 +80,7 @@ namespace UniForge
                             inConnections = true; currentNode = null;
                             break;
                         case "TEXTURE_EMBEDDED":
-                            // v1.0: embedded textures are recognized but not yet
-                            // decoded (see docs/ROADMAP.md, v1.1).
+                            pendingEmbeddedName = HeaderAttr(tokens, "name");
                             currentNode = null; inConnections = false;
                             break;
                         default:
@@ -103,6 +104,17 @@ namespace UniForge
 
                 string key = line.Substring(0, colon).Trim();
                 string value = line.Substring(colon + 1).Trim();
+
+                if (pendingEmbeddedName != null && key == "data")
+                {
+                    try
+                    {
+                        doc.EmbeddedTextures[pendingEmbeddedName] = Convert.FromBase64String(value);
+                    }
+                    catch (FormatException) { /* skip malformed base64 */ }
+                    pendingEmbeddedName = null;
+                    continue;
+                }
 
                 if (currentNode != null)
                 {
@@ -197,6 +209,18 @@ namespace UniForge
                     node.Attributes[k] = v;
             }
             return node;
+        }
+
+        /// <summary>Find a ``key=value`` attribute among header tokens (skips the kind token).</summary>
+        private static string HeaderAttr(List<string> tokens, string key)
+        {
+            for (int i = 1; i < tokens.Count; i++)
+            {
+                int eq = tokens[i].IndexOf('=');
+                if (eq > 0 && tokens[i].Substring(0, eq) == key)
+                    return tokens[i].Substring(eq + 1);
+            }
+            return null;
         }
 
         private static UnifConnection ParseConnection(string line)
