@@ -11,6 +11,7 @@ parameters so the Unity side can rebuild the graph without the source .blend.
 """
 
 import os
+import shutil
 
 import bpy
 
@@ -60,7 +61,7 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
         writer.write_node(
             unif_type,
             node_id,
-            attrs=_node_attrs(node, unif_type),
+            attrs=_node_attrs(node, unif_type, output_dir),
             params=_node_params(node, unif_type),
         )
 
@@ -230,17 +231,40 @@ def _socket_name(socket):
     return socket.name.replace(" ", "_")
 
 
-def _node_attrs(node, unif_type):
-    """Inline header attributes for a node (e.g. image path)."""
+def _node_attrs(node, unif_type, output_dir=None):
+    """Inline header attributes for a node (e.g. image path).
+
+    When ``output_dir`` is set, the referenced texture file is copied next to
+    the .unif so the export is self-contained (and lands in the Unity folder).
+    """
     attrs = {}
     if unif_type == "ImageTexture":
         image = getattr(node, "image", None)
         if image is not None:
-            path = image.filepath_raw or image.filepath or image.name
+            raw = image.filepath_raw or image.filepath
             # bpy.path.basename understands Blender's "//" relative prefix;
             # os.path.basename mangles it into a UNC root on Windows.
-            attrs["path"] = bpy.path.basename(path)
+            basename = bpy.path.basename(raw or image.name)
+            attrs["path"] = basename
+            if output_dir and raw:
+                _copy_texture(bpy.path.abspath(raw), output_dir, basename)
     return attrs
+
+
+def _copy_texture(src, output_dir, basename):
+    """Copy a source texture next to the .unif (skip if missing or up to date)."""
+    if not src or not os.path.isfile(src):
+        return
+    dest = os.path.join(output_dir, basename)
+    try:
+        if os.path.abspath(src) == os.path.abspath(dest):
+            return
+        if os.path.exists(dest) and os.path.getmtime(dest) >= os.path.getmtime(src):
+            return
+        os.makedirs(output_dir, exist_ok=True)
+        shutil.copy2(src, dest)
+    except OSError:
+        pass
 
 
 # Curated input sockets per node type (Blender socket names). When a type is

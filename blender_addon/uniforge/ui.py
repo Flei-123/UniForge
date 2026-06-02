@@ -12,9 +12,26 @@ class UNIFORGE_PT_panel(Panel):
     bl_category = "UniForge"
 
     def draw(self, context):
+        from . import preferences
+
         layout = self.layout
         layout.label(text="Blender → Unity bridge")
-        layout.operator("uniforge.export", icon="EXPORT")
+
+        # One-click export to the configured Unity folder.
+        prefs = preferences.get_prefs(context)
+        box = layout.box()
+        box.label(text="Unity project folder:")
+        if prefs is not None:
+            box.prop(prefs, "unity_assets_path", text="")
+        configured = bool(prefs and prefs.unity_assets_path.strip())
+        row = box.row()
+        row.enabled = configured
+        row.operator("uniforge.export_to_unity", icon="EXPORT")
+        if not configured:
+            box.label(text="Set a folder to enable", icon="INFO")
+
+        # Classic file-dialog export.
+        layout.operator("uniforge.export", text="Export to File…", icon="FILE")
 
         col = layout.column(align=True)
         col.label(text=f"Scene meshes: {_mesh_count(context)}")

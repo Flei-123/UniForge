@@ -6,7 +6,7 @@ import threading
 import urllib.request
 
 import bpy
-from bpy.types import AddonPreferences, Operator
+from bpy.types import Operator
 
 from . import core
 
@@ -111,24 +111,6 @@ def _download(url):
     return path
 
 
-class UNIFORGE_AP_preferences(AddonPreferences):
-    bl_idname = _PACKAGE
-
-    def draw(self, context):
-        layout = self.layout
-        version = ".".join(str(n) for n in _current_version())
-        layout.label(text=f"Installed version: v{version}")
-
-        row = layout.row(align=True)
-        row.operator(UNIFORGE_OT_check_update.bl_idname, icon="FILE_REFRESH")
-
-        result = _state.get("result")
-        if _state.get("checking"):
-            layout.label(text="Checking for updates…", icon="SORTTIME")
-        elif result:
-            draw_update_status(layout, result)
-
-
 def draw_update_status(layout, result):
     """Shared status block used by both the preferences and the N-Panel."""
     if result.get("error"):
@@ -148,7 +130,6 @@ def draw_update_status(layout, result):
 _classes = (
     UNIFORGE_OT_check_update,
     UNIFORGE_OT_install_update,
-    UNIFORGE_AP_preferences,
 )
 
 
