@@ -123,7 +123,7 @@ internal static class Program
   [MATERIAL]
     name: MatA
     slot: 0
-[OBJECT name=""Box B""]
+[OBJECT name=""Box B"" parent=BoxA]
   [MESH]
     name: BoxB
     vertices: [0,0,0, 1,0,0, 1,1,0]
@@ -131,6 +131,8 @@ internal static class Program
 ";
         UnifDocument doc = UnifParser.Parse(unif);
         Check("multi: two objects", doc.Objects.Count == 2);
+        Check("multi: parent parsed", doc.Objects[1].Parent == "BoxA");
+        Check("multi: root has no parent", doc.Objects[0].Parent == null);
         Check("multi: first mesh name", doc.Objects[0].Mesh?.Name == "BoxA");
         Check("multi: first transform pos", doc.Objects[0].Transform != null
             && doc.Objects[0].Transform.Position[0] == 1f);

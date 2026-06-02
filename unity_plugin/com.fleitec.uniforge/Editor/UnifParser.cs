@@ -69,7 +69,11 @@ namespace UniForge
                             currentMaterial = null; currentNode = null; inConnections = false;
                             break;
                         case "OBJECT":
-                            currentObject = new UnifObject { Name = HeaderAttr(tokens, "name") };
+                            currentObject = new UnifObject
+                            {
+                                Name = HeaderAttr(tokens, "name"),
+                                Parent = HeaderAttr(tokens, "parent"),
+                            };
                             doc.Objects.Add(currentObject);
                             section = Section.None;
                             currentMaterial = null; currentNode = null; inConnections = false;

@@ -38,9 +38,16 @@ class UnifWriter:
         self._kv("source_file", source_file or "<unsaved>")
         self._blank()
 
-    def begin_object(self, name):
-        """Open an [OBJECT] block; subsequent mesh/material blocks belong to it."""
-        self._block(f"OBJECT name={_format_attr(name)}")
+    def begin_object(self, name, parent=None):
+        """Open an [OBJECT] block; subsequent mesh/material blocks belong to it.
+
+        ``parent`` (when set) names another exported object this one is parented
+        to, so the Unity importer can rebuild the hierarchy.
+        """
+        header = f"OBJECT name={_format_attr(name)}"
+        if parent:
+            header += f" parent={_format_attr(parent)}"
+        self._block(header)
 
     def write_mesh(self, name, vertices, faces, uvs, normals, submeshes=None):
         self._block("MESH")
