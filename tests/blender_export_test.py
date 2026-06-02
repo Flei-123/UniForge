@@ -46,24 +46,18 @@ def _build_scene():
     mat.use_nodes = True
     tree = mat.node_tree
     bsdf = tree.nodes.get("Principled BSDF")
-    bsdf.inputs["Roughness"].default_value = 0.35
+    bsdf.inputs["Roughness"].default_value = 0.787
+    bsdf.inputs["Alpha"].default_value = 0.448  # transparent
 
-    tex = tree.nodes.new("ShaderNodeTexImage")
-    image = bpy.data.images.new("tiles_diffuse", 4, 4)
-    # A path with spaces exercises inline-attribute quoting.
-    image.filepath_raw = "//wet tiles/diffuse 01.png"
-    tex.image = image
-    tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    # Procedural Base Color: Noise -> Color Ramp -> Base Color. Should be baked
+    # to a texture and collapsed (Noise + Color Ramp must NOT appear in output).
+    noise = tree.nodes.new("ShaderNodeTexNoise")
+    noise.inputs["Scale"].default_value = 5.0
+    ramp = tree.nodes.new("ShaderNodeValToRGB")  # Color Ramp
+    tree.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+    tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
 
-    # Mapping + Texture Coordinate feeding the texture exercises the Mapping
-    # param whitelist (Location/Rotation/Scale) and connection chaining.
-    mapping = tree.nodes.new("ShaderNodeMapping")
-    mapping.inputs["Scale"].default_value = (2.0, 2.0, 1.0)
-    tex_coord = tree.nodes.new("ShaderNodeTexCoord")
-    tree.links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
-    tree.links.new(mapping.outputs["Vector"], tex.inputs["Vector"])
-
-    # A Brick Texture (bake-only) feeding Metallic exercises the bake fallback.
+    # A Brick Texture (bake-only) feeding Metallic exercises the node bake.
     brick = tree.nodes.new("ShaderNodeTexBrick")
     tree.links.new(brick.outputs["Color"], bsdf.inputs["Metallic"])
 

@@ -20,11 +20,27 @@ _BAKE_RESOLUTION = 512
 def bake_node_to_texture(obj, material, node, output_dir, resolution=_BAKE_RESOLUTION):
     """Bake ``node``'s primary output to ``output_dir``; return the PNG basename
     on success, or ``None`` if baking is not possible."""
-    tree = material.node_tree
     out_socket = _primary_output(node)
-    material_output = _find_material_output(tree)
-    if out_socket is None or material_output is None:
+    if out_socket is None:
         return None
+    return bake_socket_to_texture(
+        obj, material, out_socket, output_dir,
+        name_hint=f"{material.name}_{node.name}", resolution=resolution,
+    )
+
+
+def bake_socket_to_texture(obj, material, from_socket, output_dir, name_hint,
+                           resolution=_BAKE_RESOLUTION):
+    """Bake the value carried by ``from_socket`` (an output socket) to a PNG.
+
+    Used both for bake-only nodes and for collapsing a procedural sub-network
+    that drives a Principled input into a single texture. Returns the PNG
+    basename or ``None``."""
+    tree = material.node_tree
+    material_output = _find_material_output(tree)
+    if from_socket is None or material_output is None:
+        return None
+    out_socket = from_socket
 
     surface = material_output.inputs["Surface"]
     original_from = surface.links[0].from_socket if surface.links else None
@@ -32,7 +48,7 @@ def bake_node_to_texture(obj, material, node, output_dir, resolution=_BAKE_RESOL
     emission = tree.nodes.new("ShaderNodeEmission")
     image_node = tree.nodes.new("ShaderNodeTexImage")
     image = bpy.data.images.new(
-        f"{material.name}_{node.name}_bake", resolution, resolution, alpha=True
+        f"{name_hint}_bake".replace(" ", "_"), resolution, resolution, alpha=True
     )
     image_node.image = image
 
@@ -44,7 +60,7 @@ def bake_node_to_texture(obj, material, node, output_dir, resolution=_BAKE_RESOL
     baked_name = None
     try:
         bpy.ops.object.bake(type="EMIT")
-        baked_name = _save_png(image, material, node, output_dir)
+        baked_name = _save_png(image, name_hint, output_dir)
     except RuntimeError:
         baked_name = None
     finally:
@@ -116,9 +132,9 @@ def _begin_bake(obj, tree, image_node):
     return restore
 
 
-def _save_png(image, material, node, output_dir):
+def _save_png(image, name_hint, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    filename = f"{material.name}_{node.name}_baked.png".replace(" ", "_")
+    filename = f"{name_hint}_baked.png".replace(" ", "_")
     filepath = os.path.join(output_dir, filename)
     image.filepath_raw = filepath
     image.file_format = "PNG"

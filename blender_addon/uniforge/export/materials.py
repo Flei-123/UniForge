@@ -43,12 +43,17 @@ def export_materials(obj, writer, options):
 
 # --- internals ------------------------------------------------------------
 def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
-    ids, baked = _assign_ids(node_tree, options, obj, output_dir)
+    # Collapse procedural sub-networks driving Principled inputs into baked
+    # textures, so the exported graph stays Lit-mappable on the Unity side.
+    prebaked, excluded = _plan_procedural_bakes(node_tree, options, obj, output_dir)
+
+    ids, baked = _assign_ids(node_tree, options, obj, output_dir, prebaked, excluded)
+    baked.update(prebaked)
 
     for node, node_id in ids.items():
         if node in baked:
-            # The node was baked to a texture; emit it as an Image Texture so
-            # connections referencing its output still resolve on the Unity side.
+            # Baked to a texture; emit as an Image Texture so connections
+            # referencing its output socket still resolve on the Unity side.
             writer.write_node("ImageTexture", node_id, attrs={"path": baked[node]})
             continue
         unif_type, _status = node_map.lookup(node.bl_idname)
@@ -75,16 +80,27 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
             )
 
 
-def _assign_ids(node_tree, options, obj=None, output_dir=None):
+def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, excluded=None):
     """Map each exportable node to a stable id, baking or skipping the rest.
 
     Returns ``(ids, baked)`` where ``ids`` maps node -> id and ``baked`` maps a
-    node -> baked PNG basename (a subset of ``ids``).
+    node -> baked PNG basename (a subset of ``ids``). ``prebaked`` nodes (already
+    baked procedural roots) are assigned ids and emitted as Image Textures;
+    ``excluded`` nodes (collapsed procedural upstream) are skipped entirely.
     """
+    prebaked = prebaked or {}
+    excluded = excluded or set()
     ids = {}
     baked = {}
     next_id = 0
     for node in node_tree.nodes:
+        if node in excluded:
+            continue
+        if node in prebaked:
+            ids[node] = next_id
+            next_id += 1
+            continue
+
         unif_type, status = node_map.lookup(node.bl_idname)
 
         if unif_type is None:
@@ -107,6 +123,76 @@ def _assign_ids(node_tree, options, obj=None, output_dir=None):
         ids[node] = next_id
         next_id += 1
     return ids, baked
+
+
+# Principled inputs whose procedural drivers we collapse to a texture. Base
+# Color is the big visual win and what the Unity Lit importer consumes today
+# (-> _BaseMap). Roughness/Metallic/Normal map baking can follow once the
+# importer assigns those maps.
+_BAKEABLE_INPUTS = ("Base Color",)
+
+
+def _plan_procedural_bakes(node_tree, options, obj, output_dir):
+    """Bake Principled inputs driven by procedural networks to textures.
+
+    Returns ``(prebaked, excluded)``: ``prebaked`` maps the node feeding a
+    Principled input -> baked PNG basename (emit as Image Texture); ``excluded``
+    is the set of now-redundant upstream nodes to drop from the export.
+    """
+    prebaked = {}
+    excluded = set()
+    if not getattr(options, "bake_unsupported", False) or obj is None or output_dir is None:
+        return prebaked, excluded
+
+    bsdf = _find_principled(node_tree)
+    if bsdf is None:
+        return prebaked, excluded
+    material = _owning_material(bsdf)
+    if material is None:
+        return prebaked, excluded
+
+    for input_name in _BAKEABLE_INPUTS:
+        socket = bsdf.inputs.get(input_name)
+        if socket is None or not socket.is_linked:
+            continue
+        from_socket = socket.links[0].from_socket
+        src_node = socket.links[0].from_node
+        # A direct Image Texture is already Lit-mappable — no bake needed.
+        if src_node.bl_idname == "ShaderNodeTexImage":
+            continue
+
+        hint = f"{material.name}_{input_name}"
+        filename = bake.bake_socket_to_texture(obj, material, from_socket, output_dir, hint)
+        if filename:
+            prebaked[src_node] = filename
+            excluded |= _upstream_nodes(src_node)
+            options.report({"INFO"}, f"Baked procedural {input_name} to {filename}.")
+        else:
+            options.report({"WARNING"}, f"Could not bake procedural {input_name}.")
+
+    return prebaked, excluded
+
+
+def _find_principled(node_tree):
+    for node in node_tree.nodes:
+        if node.bl_idname == "ShaderNodeBsdfPrincipled":
+            return node
+    return None
+
+
+def _upstream_nodes(node):
+    """All nodes transitively feeding ``node``'s inputs (excluding ``node``)."""
+    result = set()
+    stack = [node]
+    while stack:
+        current = stack.pop()
+        for socket in current.inputs:
+            for link in socket.links:
+                upstream = link.from_node
+                if upstream not in result:
+                    result.add(upstream)
+                    stack.append(upstream)
+    return result
 
 
 def _try_bake(node, unif_type, options, obj, output_dir):
