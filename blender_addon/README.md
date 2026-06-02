@@ -26,3 +26,13 @@ Or symlink `uniforge/` into your Blender `scripts/addons/` for live editing.
 | `uniforge/ui.py`      | N-Panel sidebar tab.                            |
 | `uniforge/export/`    | mesh / materials extraction, node mapping.      |
 | `uniforge/unif/`      | `.unif` writer.                                 |
+| `uniforge/update/`    | in-addon updater (GitHub Releases).             |
+| `uniforge/browser/`   | CC0 material browser (ambientCG).               |
+
+## Material browser
+
+N-Panel → **UniForge** → *Material Browser (CC0)*: search ambientCG, pick a
+material + resolution, and **Download & Apply** builds a PBR material (Base
+Color / Roughness / Metallic / Normal) and assigns it to the active mesh. All
+ambientCG materials are CC0 (free for any use). Textures download next to the
+`.blend` (or to a temp folder if unsaved).
