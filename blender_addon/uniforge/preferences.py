@@ -46,6 +46,12 @@ class UNIFORGE_AP_preferences(AddonPreferences):
         default=False,
     )
 
+    auto_recalc_normals: BoolProperty(
+        name="Recalculate Normals",
+        description="Recompute outward-facing normals on export (non-destructive)",
+        default=False,
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -53,6 +59,7 @@ class UNIFORGE_AP_preferences(AddonPreferences):
         box.label(text="Export to Unity", icon="EXPORT")
         box.prop(self, "unity_assets_path")
         box.prop(self, "auto_smart_uv")
+        box.prop(self, "auto_recalc_normals")
         box.label(text="One-click export drops the .unif + textures here.")
 
         box = layout.box()

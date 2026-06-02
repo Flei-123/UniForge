@@ -29,10 +29,23 @@ namespace UniForge
         {
             var doc = new UnifDocument();
             var section = Section.None;
+            UnifObject currentObject = null;
             UnifMaterial currentMaterial = null;
             UnifNode currentNode = null;
             bool inConnections = false;
             string pendingEmbeddedName = null; // set by [TEXTURE_EMBEDDED], consumed by its data: line
+
+            // Geometry blocks before any [OBJECT] (legacy single-object files)
+            // attach to one implicit object.
+            UnifObject EnsureObject()
+            {
+                if (currentObject == null)
+                {
+                    currentObject = new UnifObject();
+                    doc.Objects.Add(currentObject);
+                }
+                return currentObject;
+            }
 
             foreach (string rawLine in text.Split('\n'))
             {
@@ -55,20 +68,26 @@ namespace UniForge
                             section = Section.Unif;
                             currentMaterial = null; currentNode = null; inConnections = false;
                             break;
+                        case "OBJECT":
+                            currentObject = new UnifObject { Name = HeaderAttr(tokens, "name") };
+                            doc.Objects.Add(currentObject);
+                            section = Section.None;
+                            currentMaterial = null; currentNode = null; inConnections = false;
+                            break;
                         case "MESH":
                             section = Section.Mesh;
-                            doc.Mesh = new UnifMesh();
+                            EnsureObject().Mesh = new UnifMesh();
                             currentMaterial = null; currentNode = null; inConnections = false;
                             break;
                         case "TRANSFORM":
                             section = Section.Transform;
-                            doc.Transform = new UnifTransform();
+                            EnsureObject().Transform = new UnifTransform();
                             currentMaterial = null; currentNode = null; inConnections = false;
                             break;
                         case "MATERIAL":
                             section = Section.Material;
                             currentMaterial = new UnifMaterial();
-                            doc.Materials.Add(currentMaterial);
+                            EnsureObject().Materials.Add(currentMaterial);
                             currentNode = null; inConnections = false;
                             break;
                         case "NODE":
@@ -128,13 +147,13 @@ namespace UniForge
                 {
                     AssignUnifField(doc, key, value);
                 }
-                else if (section == Section.Mesh && doc.Mesh != null)
+                else if (section == Section.Mesh && currentObject?.Mesh != null)
                 {
-                    AssignMeshField(doc.Mesh, key, value);
+                    AssignMeshField(currentObject.Mesh, key, value);
                 }
-                else if (section == Section.Transform && doc.Transform != null)
+                else if (section == Section.Transform && currentObject?.Transform != null)
                 {
-                    AssignTransformField(doc.Transform, key, value);
+                    AssignTransformField(currentObject.Transform, key, value);
                 }
             }
 

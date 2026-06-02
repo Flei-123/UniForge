@@ -38,6 +38,10 @@ class UnifWriter:
         self._kv("source_file", source_file or "<unsaved>")
         self._blank()
 
+    def begin_object(self, name):
+        """Open an [OBJECT] block; subsequent mesh/material blocks belong to it."""
+        self._block(f"OBJECT name={_format_attr(name)}")
+
     def write_mesh(self, name, vertices, faces, uvs, normals, submeshes=None):
         self._block("MESH")
         self._kv("name", name)

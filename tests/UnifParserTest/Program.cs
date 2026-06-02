@@ -107,6 +107,42 @@ internal static class Program
 
         RunClassifierAssertions();
         RunEmbeddedTextureAssertions();
+        RunMultiObjectAssertions();
+    }
+
+    private static void RunMultiObjectAssertions()
+    {
+        const string unif = @"
+[OBJECT name=BoxA]
+  [MESH]
+    name: BoxA
+    vertices: [0,0,0, 1,0,0, 1,1,0]
+    faces: [0,1,2]
+  [TRANSFORM]
+    position: 1, 2, 3
+  [MATERIAL]
+    name: MatA
+    slot: 0
+[OBJECT name=""Box B""]
+  [MESH]
+    name: BoxB
+    vertices: [0,0,0, 1,0,0, 1,1,0]
+    faces: [0,1,2]
+";
+        UnifDocument doc = UnifParser.Parse(unif);
+        Check("multi: two objects", doc.Objects.Count == 2);
+        Check("multi: first mesh name", doc.Objects[0].Mesh?.Name == "BoxA");
+        Check("multi: first transform pos", doc.Objects[0].Transform != null
+            && doc.Objects[0].Transform.Position[0] == 1f);
+        Check("multi: first material", doc.Objects[0].Materials.Count == 1
+            && doc.Objects[0].Materials[0].Name == "MatA");
+        Check("multi: second object (quoted name mesh)", doc.Objects[1].Mesh?.Name == "BoxB");
+        Check("multi: doc.Mesh back-compat = first", doc.Mesh?.Name == "BoxA");
+
+        // Legacy single-object (no [OBJECT]) still parses into one implicit object.
+        UnifDocument legacy = UnifParser.Parse("[MESH]\n  name: Solo\n  faces: [0,1,2]\n");
+        Check("legacy: implicit single object", legacy.Objects.Count == 1
+            && legacy.Mesh?.Name == "Solo");
     }
 
     private static void RunEmbeddedTextureAssertions()
