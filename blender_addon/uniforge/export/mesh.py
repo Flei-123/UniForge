@@ -164,16 +164,17 @@ def _extract_geometry(mesh):
 def _write_transform(obj, writer):
     """Emit the [TRANSFORM] block in Unity space.
 
-    Position and scale convert cleanly via the (x, y, z) -> (x, z, y) axis
-    swap. Rotation is exported as degrees with the same axis swap; full
-    handedness parity is verified during the importer round-trip milestone.
+    Uses the object's *world* matrix (not local location), so parented objects
+    land at their true world position when re-parented flat under the Unity
+    root. Position and scale convert via the (x, y, z) -> (x, z, y) axis swap;
+    rotation is exported as degrees with the same swap.
     """
-    position = blender_to_unity_vector(obj.location)
+    location, rotation_quat, scale = obj.matrix_world.decompose()
 
-    sx, sy, sz = obj.scale
-    scale = (sx, sz, sy)
+    position = blender_to_unity_vector(location)
+    scale = (scale.x, scale.z, scale.y)
 
-    rx, ry, rz = (math.degrees(a) for a in obj.rotation_euler)
-    rotation = (rx, rz, ry)
+    euler = rotation_quat.to_euler("XYZ")
+    rotation = (math.degrees(euler.x), math.degrees(euler.z), math.degrees(euler.y))
 
     writer.write_transform(position, rotation, scale)
