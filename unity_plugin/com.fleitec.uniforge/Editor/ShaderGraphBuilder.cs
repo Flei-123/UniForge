@@ -68,6 +68,7 @@ namespace UniForge
             ApplyEmission(mat, bsdf);
             ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, doc, mapped);
             ApplyNormalTexture(mat, unifMat, bsdf, ctx, doc, mapped);
+            ApplyMetallicSmoothnessTexture(mat, unifMat, bsdf, ctx, doc, mapped);
 
             WarnUnmappedNodes(unifMat, ctx, mapped);
             return mat;
@@ -193,6 +194,30 @@ namespace UniForge
             SetTexture(mat, "_BumpMap", tex);
             if (mat.HasProperty("_BumpMap"))
                 mat.EnableKeyword("_NORMALMAP");
+        }
+
+        private static void ApplyMetallicSmoothnessTexture(
+            Material mat, UnifMaterial unifMat, UnifNode bsdf,
+            AssetImportContext ctx, UnifDocument doc, HashSet<int> mapped)
+        {
+            // A texture on Metallic is a packed map: metallic in RGB, Unity
+            // smoothness (1 - Blender roughness) in alpha.
+            UnifNode src = FindSource(unifMat, bsdf.Id, "Metallic");
+            if (src == null || src.Type != "ImageTexture")
+                return;
+
+            Texture2D tex = LoadTexture(src, ctx, doc);
+            mapped.Add(src.Id);
+            if (tex == null)
+                return;
+
+            if (mat.HasProperty("_MetallicGlossMap"))
+                mat.SetTexture("_MetallicGlossMap", tex);
+            // URP Lit and Built-in Standard use different keyword names.
+            mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+            mat.EnableKeyword("_METALLICGLOSSMAP");
+            if (mat.HasProperty("_SmoothnessTextureChannel"))
+                mat.SetFloat("_SmoothnessTextureChannel", 0f); // 0 = metallic-map alpha
         }
 
         private static Texture2D LoadTexture(UnifNode imageNode, AssetImportContext ctx, UnifDocument doc)

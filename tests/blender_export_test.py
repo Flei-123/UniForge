@@ -49,17 +49,20 @@ def _build_scene():
     bsdf.inputs["Roughness"].default_value = 0.787
     bsdf.inputs["Alpha"].default_value = 0.448  # transparent
 
-    # Procedural Base Color: Noise -> Color Ramp -> Base Color. Should be baked
-    # to a texture and collapsed (Noise + Color Ramp must NOT appear in output).
+    # Procedural Base Color: Noise -> Color Ramp -> Base Color. Baked to a
+    # texture and collapsed (Noise + Color Ramp must NOT appear in output).
     noise = tree.nodes.new("ShaderNodeTexNoise")
     noise.inputs["Scale"].default_value = 5.0
     ramp = tree.nodes.new("ShaderNodeValToRGB")  # Color Ramp
     tree.links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
     tree.links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
 
-    # A Brick Texture (bake-only) feeding Metallic exercises the node bake.
-    brick = tree.nodes.new("ShaderNodeTexBrick")
-    tree.links.new(brick.outputs["Color"], bsdf.inputs["Metallic"])
+    # Procedural Metallic: a second Noise -> Color Ramp -> Metallic. Should be
+    # baked into a packed MetallicSmoothness map (R=metallic, A=1-roughness).
+    noise2 = tree.nodes.new("ShaderNodeTexNoise")
+    ramp2 = tree.nodes.new("ShaderNodeValToRGB")
+    tree.links.new(noise2.outputs["Fac"], ramp2.inputs["Fac"])
+    tree.links.new(ramp2.outputs["Color"], bsdf.inputs["Metallic"])
 
     obj.data.materials.append(mat)
     return obj
