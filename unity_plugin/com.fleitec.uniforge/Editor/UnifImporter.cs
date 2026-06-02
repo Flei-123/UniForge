@@ -9,7 +9,7 @@ namespace UniForge
     /// folder is parsed and turned into Mesh, Shader Graph, Material, and
     /// Prefab sub-assets (spec §5.2 / §5.3).
     /// </summary>
-    [ScriptedImporter(version: 6, ext: "unif")]
+    [ScriptedImporter(version: 7, ext: "unif")]
     public class UnifImporter : ScriptedImporter
     {
         public const string SupportedFormatVersion = "1.0";
@@ -26,41 +26,66 @@ namespace UniForge
                     $"(importer supports {SupportedFormatVersion}).");
             }
 
-            // Build a child GameObject per exported object under one root, so
-            // multi-object .unif files import as a single prefab hierarchy.
-            string rootName = string.IsNullOrEmpty(doc.SourceFile)
-                ? "UnifAsset"
-                : System.IO.Path.GetFileNameWithoutExtension(doc.SourceFile);
-            var root = new GameObject(rootName);
-
             // Textures are shared across the whole file (one sub-asset each).
             var textureCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
+            var built = new System.Collections.Generic.List<GameObject>();
+            var byName = new System.Collections.Generic.Dictionary<string, GameObject>();
 
+            // Pass 1: build a GameObject (mesh + materials) per object.
             for (int i = 0; i < doc.Objects.Count; i++)
             {
                 UnifObject obj = doc.Objects[i];
-                if (obj.Mesh == null)
-                    continue;
+                var go = new GameObject(obj.Name ?? obj.Mesh?.Name ?? $"Object_{i}");
 
-                Mesh mesh = MeshBuilder.Build(obj.Mesh);
-                ctx.AddObjectToAsset($"mesh_{i}", mesh);
+                if (obj.Mesh != null)
+                {
+                    Mesh mesh = MeshBuilder.Build(obj.Mesh);
+                    ctx.AddObjectToAsset($"mesh_{i}", mesh);
+                    Material[] materials = ShaderGraphBuilder.BuildMaterials(
+                        obj.Materials, doc, ctx, mesh.subMeshCount, textureCache, $"o{i}_");
+                    go.AddComponent<MeshFilter>().sharedMesh = mesh;
+                    var renderer = go.AddComponent<MeshRenderer>();
+                    if (materials != null && materials.Length > 0)
+                        renderer.sharedMaterials = materials;
+                }
 
-                Material[] materials = ShaderGraphBuilder.BuildMaterials(
-                    obj.Materials, doc, ctx, mesh.subMeshCount, textureCache, $"o{i}_");
-
-                var child = new GameObject(obj.Mesh.Name ?? $"Object_{i}");
-                child.transform.SetParent(root.transform, worldPositionStays: false);
-                ApplyTransform(child.transform, obj.Transform);
-
-                var filter = child.AddComponent<MeshFilter>();
-                filter.sharedMesh = mesh;
-                var renderer = child.AddComponent<MeshRenderer>();
-                if (materials != null && materials.Length > 0)
-                    renderer.sharedMaterials = materials;
+                built.Add(go);
+                if (!string.IsNullOrEmpty(obj.Name))
+                    byName[obj.Name] = go;
             }
 
-            ctx.AddObjectToAsset("prefab", root);
-            ctx.SetMainObject(root);
+            // Pass 2: rebuild Blender's parent hierarchy and apply transforms.
+            var roots = new System.Collections.Generic.List<GameObject>();
+            for (int i = 0; i < doc.Objects.Count; i++)
+            {
+                UnifObject obj = doc.Objects[i];
+                GameObject go = built[i];
+                if (!string.IsNullOrEmpty(obj.Parent) && byName.TryGetValue(obj.Parent, out GameObject parentGo))
+                    go.transform.SetParent(parentGo.transform, worldPositionStays: false);
+                else
+                    roots.Add(go);
+                ApplyTransform(go.transform, obj.Transform); // local for children, world for roots
+            }
+
+            // A single top-level object is the prefab root (its pivot matches the
+            // Blender origin); multiple roots are wrapped in a container.
+            GameObject prefab;
+            if (roots.Count == 1)
+            {
+                prefab = roots[0];
+            }
+            else
+            {
+                string rootName = string.IsNullOrEmpty(doc.SourceFile)
+                    ? "UnifAsset"
+                    : System.IO.Path.GetFileNameWithoutExtension(doc.SourceFile);
+                prefab = new GameObject(rootName);
+                foreach (GameObject r in roots)
+                    r.transform.SetParent(prefab.transform, worldPositionStays: true);
+            }
+
+            ctx.AddObjectToAsset("prefab", prefab);
+            ctx.SetMainObject(prefab);
         }
 
         private static void ApplyTransform(Transform transform, UnifTransform t)

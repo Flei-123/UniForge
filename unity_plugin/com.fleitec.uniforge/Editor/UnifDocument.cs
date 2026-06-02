@@ -32,6 +32,7 @@ namespace UniForge
     public class UnifObject
     {
         public string Name;
+        public string Parent; // name of the parent object, or null for top-level
         public UnifMesh Mesh;
         public UnifTransform Transform;
         public readonly List<UnifMaterial> Materials = new List<UnifMaterial>();
