@@ -182,7 +182,10 @@ def _plan_procedural_bakes(node_tree, options, obj, output_dir, writer=None):
                 options.report({"INFO"}, f"Baked procedural Base Color to {filename}.")
 
     # Metallic + Roughness: packed into one Unity map (R=metallic, A=smoothness).
-    if _is_procedural_input(bsdf, "Metallic") or _is_procedural_input(bsdf, "Roughness"):
+    # Triggered whenever either is textured — procedural OR a direct image map
+    # (separate Metallic/Roughness maps, e.g. from the material browser, can't
+    # map to URP's single Metallic/Smoothness texture otherwise).
+    if _is_textured_input(bsdf, "Metallic") or _is_textured_input(bsdf, "Roughness"):
         hint = f"{material.name}_MetallicSmoothness"
         filename = bake.bake_metallic_smoothness(obj, material, bsdf, output_dir, hint)
         if filename:
@@ -220,6 +223,12 @@ def _is_procedural_input(bsdf, input_name):
     if socket is None or not socket.is_linked:
         return False
     return socket.links[0].from_node.bl_idname != "ShaderNodeTexImage"
+
+
+def _is_textured_input(bsdf, input_name):
+    """True if the input is linked to anything (procedural or a direct image)."""
+    socket = bsdf.inputs.get(input_name)
+    return socket is not None and socket.is_linked
 
 
 def _finalize_texture(writer, options, output_dir, basename):
