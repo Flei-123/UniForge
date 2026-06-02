@@ -23,11 +23,11 @@ def export_object(obj, writer, options):
     """Serialize ``obj``'s geometry and transform into ``writer``."""
     mesh, owner = _evaluated_mesh(obj, options)
     try:
-        vertices, faces, uvs, normals = _extract_geometry(mesh)
+        vertices, faces, uvs, normals, submeshes = _extract_geometry(mesh)
     finally:
         owner.to_mesh_clear()
 
-    writer.write_mesh(obj.name, vertices, faces, uvs, normals)
+    writer.write_mesh(obj.name, vertices, faces, uvs, normals, submeshes)
     _write_transform(obj, writer)
 
 
@@ -93,43 +93,57 @@ def _evaluated_mesh(obj, options):
 
 
 def _extract_geometry(mesh):
-    """Triangulate, convert axes, and return flat (vertices, faces, uvs, normals)."""
+    """Triangulate, convert axes, group triangles by material slot.
+
+    Returns ``(vertices, faces, uvs, normals, submeshes)``. ``faces`` is ordered
+    by material slot, and ``submeshes`` holds the triangle count per slot so the
+    Unity importer can build one submesh per material.
+    """
     if hasattr(mesh, "calc_normals_split"):
         # Required for split_normals on Blender < 4.1; a no-op concept on 4.1+.
         mesh.calc_normals_split()
     mesh.calc_loop_triangles()
 
     uv_data = mesh.uv_layers.active.data if mesh.uv_layers.active else None
+    slot_count = max(len(mesh.materials), 1)
+
+    triangles_by_slot = [[] for _ in range(slot_count)]
+    for tri in mesh.loop_triangles:
+        slot_index = min(tri.material_index, slot_count - 1)
+        triangles_by_slot[slot_index].append(tri)
 
     vertices = []
     normals = []
     uvs = []
     faces = []
+    submeshes = []
     corner = 0
 
-    for tri in mesh.loop_triangles:
-        corners = []
-        for slot in range(3):
-            loop_index = tri.loops[slot]
-            co = mesh.vertices[tri.vertices[slot]].co
-            no = tri.split_normals[slot]
+    for slot_triangles in triangles_by_slot:
+        for tri in slot_triangles:
+            corners = []
+            for slot in range(3):
+                loop_index = tri.loops[slot]
+                co = mesh.vertices[tri.vertices[slot]].co
+                no = tri.split_normals[slot]
 
-            vertices.extend(blender_to_unity_vector(co))
-            normals.extend(blender_to_unity_vector(no))
-            if uv_data is not None:
-                uv = uv_data[loop_index].uv
-                uvs.extend((uv[0], uv[1]))
-            else:
-                uvs.extend((0.0, 0.0))
+                vertices.extend(blender_to_unity_vector(co))
+                normals.extend(blender_to_unity_vector(no))
+                if uv_data is not None:
+                    uv = uv_data[loop_index].uv
+                    uvs.extend((uv[0], uv[1]))
+                else:
+                    uvs.extend((0.0, 0.0))
 
-            corners.append(corner)
-            corner += 1
+                corners.append(corner)
+                corner += 1
 
-        # The Z-up → Y-up axis swap mirrors handedness, so reverse winding to
-        # keep faces front-facing in Unity.
-        faces.extend((corners[0], corners[2], corners[1]))
+            # The Z-up → Y-up axis swap mirrors handedness, so reverse winding
+            # to keep faces front-facing in Unity.
+            faces.extend((corners[0], corners[2], corners[1]))
+        submeshes.append(len(slot_triangles))
 
-    return vertices, faces, uvs, normals
+    return vertices, faces, uvs, normals, submeshes
 
 
 def _write_transform(obj, writer):

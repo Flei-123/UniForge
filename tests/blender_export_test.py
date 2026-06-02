@@ -65,6 +65,14 @@ def _build_scene():
     tree.links.new(ramp2.outputs["Color"], bsdf.inputs["Metallic"])
 
     obj.data.materials.append(mat)
+
+    # A second material slot on two faces exercises submesh export.
+    mat2 = bpy.data.materials.new("SecondSlot_Mat")
+    mat2.use_nodes = True
+    obj.data.materials.append(mat2)
+    for i, poly in enumerate(obj.data.polygons):
+        poly.material_index = 1 if i < 2 else 0
+
     return obj
 
 
