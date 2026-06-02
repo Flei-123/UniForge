@@ -196,6 +196,21 @@ def _plan_procedural_bakes(node_tree, options, obj, output_dir, writer=None):
                     excluded |= _upstream_nodes(src)
             options.report({"INFO"}, f"Baked Metallic/Smoothness to {filename}.")
 
+    # Emission: bake a procedurally-driven emission color to a map.
+    if _is_procedural_input(bsdf, "Emission Color"):
+        socket = bsdf.inputs.get("Emission Color")
+        hint = f"{material.name}_Emission"
+        filename = bake.bake_socket_to_texture(
+            obj, material, socket.links[0].from_socket, output_dir, hint
+        )
+        if filename:
+            filename = _finalize_texture(writer, options, output_dir, filename)
+            synthetic.append(("Emission_Color", filename))
+            src = socket.links[0].from_node
+            excluded.add(src)
+            excluded |= _upstream_nodes(src)
+            options.report({"INFO"}, f"Baked Emission to {filename}.")
+
     return prebaked, excluded, synthetic
 
 

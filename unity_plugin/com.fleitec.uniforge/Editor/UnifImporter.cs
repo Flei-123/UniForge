@@ -9,7 +9,7 @@ namespace UniForge
     /// folder is parsed and turned into Mesh, Shader Graph, Material, and
     /// Prefab sub-assets (spec §5.2 / §5.3).
     /// </summary>
-    [ScriptedImporter(version: 7, ext: "unif")]
+    [ScriptedImporter(version: 8, ext: "unif")]
     public class UnifImporter : ScriptedImporter
     {
         public const string SupportedFormatVersion = "1.0";

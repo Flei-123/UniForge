@@ -21,6 +21,8 @@ namespace UniForge
                 mesh.SetUVs(0, ToVector2Array(data.Uvs));
             if (data.Normals != null && data.Normals.Length > 0)
                 mesh.SetNormals(ToVector3Array(data.Normals));
+            if (data.Colors != null && data.Colors.Length > 0)
+                mesh.SetColors(ToColorArray(data.Colors));
 
             AssignSubmeshes(mesh, faces, data.Submeshes);
 
@@ -63,6 +65,15 @@ namespace UniForge
             var result = new Vector3[flat.Length / 3];
             for (int i = 0; i < result.Length; i++)
                 result[i] = new Vector3(flat[i * 3], flat[i * 3 + 1], flat[i * 3 + 2]);
+            return result;
+        }
+
+        private static Color[] ToColorArray(float[] flat)
+        {
+            if (flat == null) return Array.Empty<Color>();
+            var result = new Color[flat.Length / 4];
+            for (int i = 0; i < result.Length; i++)
+                result[i] = new Color(flat[i * 4], flat[i * 4 + 1], flat[i * 4 + 2], flat[i * 4 + 3]);
             return result;
         }
 

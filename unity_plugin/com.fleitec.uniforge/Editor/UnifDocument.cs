@@ -45,6 +45,7 @@ namespace UniForge
         public int[] Faces;      // flat triangle index triples, ordered by submesh
         public float[] Uvs;      // flat uv pairs
         public float[] Normals;  // flat xyz triples
+        public float[] Colors;   // flat rgba per vertex (null = none)
         public int[] Submeshes;  // triangle count per material slot (null = single submesh)
     }
 
