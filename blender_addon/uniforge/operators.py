@@ -71,13 +71,16 @@ def _run_export(operator, context):
     writer = UnifWriter(generator="UniForge Blender Addon 1.0")
     writer.write_header(source_file=bpy.path.basename(bpy.data.filepath))
 
+    mesh_set = set(meshes)
     for obj in meshes:
-        writer.begin_object(obj.name)
+        # Preserve Blender's parent hierarchy when the parent is also exported.
+        parent = obj.parent if obj.parent in mesh_set else None
+        writer.begin_object(obj.name, parent.name if parent else None)
         # Smart-UV-project (temporarily) so baked textures map cleanly; the
         # same active UV layer feeds both mesh export and baking.
         restore_uv = mesh_export.apply_smart_uv(obj) if operator.smart_uv else None
         try:
-            mesh_export.export_object(obj, writer, options=operator)
+            mesh_export.export_object(obj, writer, options=operator, parent=parent)
             material_export.export_materials(obj, writer, options=operator)
         finally:
             if restore_uv is not None:

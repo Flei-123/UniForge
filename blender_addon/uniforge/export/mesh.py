@@ -20,7 +20,7 @@ import bmesh
 import bpy
 
 
-def export_object(obj, writer, options):
+def export_object(obj, writer, options, parent=None):
     """Serialize ``obj``'s geometry and transform into ``writer``."""
     mesh, owner = _evaluated_mesh(obj, options)
     try:
@@ -31,7 +31,7 @@ def export_object(obj, writer, options):
         owner.to_mesh_clear()
 
     writer.write_mesh(obj.name, vertices, faces, uvs, normals, submeshes)
-    _write_transform(obj, writer)
+    _write_transform(obj, writer, parent)
 
 
 def blender_to_unity_vector(vec):
@@ -161,15 +161,21 @@ def _extract_geometry(mesh):
     return vertices, faces, uvs, normals, submeshes
 
 
-def _write_transform(obj, writer):
+def _write_transform(obj, writer, parent=None):
     """Emit the [TRANSFORM] block in Unity space.
 
-    Uses the object's *world* matrix (not local location), so parented objects
-    land at their true world position when re-parented flat under the Unity
-    root. Position and scale convert via the (x, y, z) -> (x, z, y) axis swap;
-    rotation is exported as degrees with the same swap.
+    For a parented object the transform is relative to its (exported) parent —
+    accounting for Blender's parent-inverse — so the Unity importer can rebuild
+    the hierarchy faithfully. Top-level objects use their world matrix. Position
+    and scale convert via the (x, y, z) -> (x, z, y) axis swap; rotation is
+    exported as degrees with the same swap.
     """
-    location, rotation_quat, scale = obj.matrix_world.decompose()
+    if parent is not None:
+        matrix = parent.matrix_world.inverted() @ obj.matrix_world
+    else:
+        matrix = obj.matrix_world
+
+    location, rotation_quat, scale = matrix.decompose()
 
     position = blender_to_unity_vector(location)
     scale = (scale.x, scale.z, scale.y)
