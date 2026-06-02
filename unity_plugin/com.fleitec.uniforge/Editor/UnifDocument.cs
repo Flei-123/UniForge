@@ -12,6 +12,11 @@ namespace UniForge
         public UnifMesh Mesh;
         public UnifTransform Transform;
         public readonly List<UnifMaterial> Materials = new List<UnifMaterial>();
+
+        // Base64-decoded textures embedded in the file, keyed by their name
+        // (which matches an Image Texture node's "path" attribute).
+        public readonly Dictionary<string, byte[]> EmbeddedTextures =
+            new Dictionary<string, byte[]>();
     }
 
     public class UnifMesh

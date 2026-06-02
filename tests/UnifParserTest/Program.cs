@@ -106,6 +106,24 @@ internal static class Program
         Check("connection dst socket (underscore preserved)", c0.TargetSocket == "Base_Color");
 
         RunClassifierAssertions();
+        RunEmbeddedTextureAssertions();
+    }
+
+    private static void RunEmbeddedTextureAssertions()
+    {
+        // "hello" -> base64; name carries a space to exercise quoted attrs.
+        const string unif = @"
+[MATERIAL]
+  name: M
+  [NODE ImageTexture id=0 path=""wet tile.png""]
+[TEXTURE_EMBEDDED name=""wet tile.png"" format=png]
+  data: aGVsbG8=
+";
+        UnifDocument doc = UnifParser.Parse(unif);
+        Check("embedded: one texture parsed", doc.EmbeddedTextures.Count == 1);
+        bool found = doc.EmbeddedTextures.TryGetValue("wet tile.png", out byte[] bytes);
+        Check("embedded: keyed by quoted name", found);
+        Check("embedded: base64 decoded", found && System.Text.Encoding.ASCII.GetString(bytes) == "hello");
     }
 
     private static void RunClassifierAssertions()

@@ -46,9 +46,9 @@ def export_materials(obj, writer, options):
 def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
     # Collapse procedural sub-networks driving Principled inputs into baked
     # textures, so the exported graph stays Lit-mappable on the Unity side.
-    prebaked, excluded = _plan_procedural_bakes(node_tree, options, obj, output_dir)
+    prebaked, excluded = _plan_procedural_bakes(node_tree, options, obj, output_dir, writer)
 
-    ids, baked = _assign_ids(node_tree, options, obj, output_dir, prebaked, excluded)
+    ids, baked = _assign_ids(node_tree, options, obj, output_dir, prebaked, excluded, writer)
     baked.update(prebaked)
 
     for node, node_id in ids.items():
@@ -61,7 +61,7 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
         writer.write_node(
             unif_type,
             node_id,
-            attrs=_node_attrs(node, unif_type, output_dir),
+            attrs=_node_attrs(node, unif_type, output_dir, options, writer),
             params=_node_params(node, unif_type),
         )
 
@@ -81,7 +81,7 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
             )
 
 
-def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, excluded=None):
+def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, excluded=None, writer=None):
     """Map each exportable node to a stable id, baking or skipping the rest.
 
     Returns ``(ids, baked)`` where ``ids`` maps node -> id and ``baked`` maps a
@@ -116,6 +116,7 @@ def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, ex
             filename = _try_bake(node, unif_type, options, obj, output_dir)
             if filename is None:
                 continue
+            filename = _finalize_texture(writer, options, output_dir, filename)
             ids[node] = next_id
             baked[node] = filename
             next_id += 1
@@ -133,7 +134,7 @@ def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, ex
 _BAKEABLE_INPUTS = ("Base Color",)
 
 
-def _plan_procedural_bakes(node_tree, options, obj, output_dir):
+def _plan_procedural_bakes(node_tree, options, obj, output_dir, writer=None):
     """Bake Principled inputs driven by procedural networks to textures.
 
     Returns ``(prebaked, excluded)``: ``prebaked`` maps the node feeding a
@@ -165,6 +166,7 @@ def _plan_procedural_bakes(node_tree, options, obj, output_dir):
         hint = f"{material.name}_{input_name}"
         filename = bake.bake_socket_to_texture(obj, material, from_socket, output_dir, hint)
         if filename:
+            filename = _finalize_texture(writer, options, output_dir, filename)
             prebaked[src_node] = filename
             excluded |= _upstream_nodes(src_node)
             options.report({"INFO"}, f"Baked procedural {input_name} to {filename}.")
@@ -172,6 +174,30 @@ def _plan_procedural_bakes(node_tree, options, obj, output_dir):
             options.report({"WARNING"}, f"Could not bake procedural {input_name}.")
 
     return prebaked, excluded
+
+
+def _finalize_texture(writer, options, output_dir, basename):
+    """Embed a just-baked PNG (and remove the standalone file) when embedding."""
+    if getattr(options, "embed_textures", False) and writer is not None and output_dir:
+        full = os.path.join(output_dir, basename)
+        if _embed_file(writer, full, basename):
+            try:
+                os.remove(full)
+            except OSError:
+                pass
+    return basename
+
+
+def _embed_file(writer, filepath, basename):
+    """Read a texture file and queue it as a [TEXTURE_EMBEDDED] block."""
+    try:
+        with open(filepath, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return False
+    fmt = os.path.splitext(basename)[1].lstrip(".").lower() or "png"
+    writer.queue_embedded(basename, fmt, data)
+    return True
 
 
 def _find_principled(node_tree):
@@ -231,11 +257,12 @@ def _socket_name(socket):
     return socket.name.replace(" ", "_")
 
 
-def _node_attrs(node, unif_type, output_dir=None):
+def _node_attrs(node, unif_type, output_dir=None, options=None, writer=None):
     """Inline header attributes for a node (e.g. image path).
 
-    When ``output_dir`` is set, the referenced texture file is copied next to
-    the .unif so the export is self-contained (and lands in the Unity folder).
+    With *Embed Textures* the referenced image is Base64-embedded into the
+    .unif; otherwise (when ``output_dir`` is set) it is copied next to the
+    .unif so the export is self-contained either way.
     """
     attrs = {}
     if unif_type == "ImageTexture":
@@ -246,8 +273,11 @@ def _node_attrs(node, unif_type, output_dir=None):
             # os.path.basename mangles it into a UNC root on Windows.
             basename = bpy.path.basename(raw or image.name)
             attrs["path"] = basename
-            if output_dir and raw:
-                _copy_texture(bpy.path.abspath(raw), output_dir, basename)
+            src = bpy.path.abspath(raw) if raw else None
+            if getattr(options, "embed_textures", False) and writer is not None and src:
+                _embed_file(writer, src, basename)
+            elif output_dir and src:
+                _copy_texture(src, output_dir, basename)
     return attrs
 
 

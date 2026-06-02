@@ -29,13 +29,13 @@ namespace UniForge
             var materials = new Material[ordered.Count];
             for (int i = 0; i < ordered.Count; i++)
             {
-                materials[i] = BuildOne(ordered[i], ctx);
+                materials[i] = BuildOne(ordered[i], ctx, doc);
                 ctx.AddObjectToAsset($"material_{ordered[i].Slot}", materials[i]);
             }
             return materials;
         }
 
-        private static Material BuildOne(UnifMaterial unifMat, AssetImportContext ctx)
+        private static Material BuildOne(UnifMaterial unifMat, AssetImportContext ctx, UnifDocument doc)
         {
             // Only reconstruct a custom shader when the node network actually
             // needs one; otherwise a plain Lit material is sufficient.
@@ -66,8 +66,8 @@ namespace UniForge
             ApplyScalarParams(mat, bsdf);
             ApplyTransparency(mat, bsdf);
             ApplyEmission(mat, bsdf);
-            ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, mapped);
-            ApplyNormalTexture(mat, unifMat, bsdf, ctx, mapped);
+            ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, doc, mapped);
+            ApplyNormalTexture(mat, unifMat, bsdf, ctx, doc, mapped);
 
             WarnUnmappedNodes(unifMat, ctx, mapped);
             return mat;
@@ -152,13 +152,13 @@ namespace UniForge
         // --- texture mapping --------------------------------------------------
         private static void ApplyBaseColorTexture(
             Material mat, UnifMaterial unifMat, UnifNode bsdf,
-            AssetImportContext ctx, HashSet<int> mapped)
+            AssetImportContext ctx, UnifDocument doc, HashSet<int> mapped)
         {
             UnifNode src = FindSource(unifMat, bsdf.Id, "Base_Color");
             if (src == null || src.Type != "ImageTexture")
                 return;
 
-            Texture2D tex = LoadTexture(src, ctx);
+            Texture2D tex = LoadTexture(src, ctx, doc);
             mapped.Add(src.Id);
             if (tex == null)
                 return;
@@ -169,7 +169,7 @@ namespace UniForge
 
         private static void ApplyNormalTexture(
             Material mat, UnifMaterial unifMat, UnifNode bsdf,
-            AssetImportContext ctx, HashSet<int> mapped)
+            AssetImportContext ctx, UnifDocument doc, HashSet<int> mapped)
         {
             UnifNode src = FindSource(unifMat, bsdf.Id, "Normal");
             if (src == null)
@@ -185,7 +185,7 @@ namespace UniForge
             if (imageNode == null || imageNode.Type != "ImageTexture")
                 return;
 
-            Texture2D tex = LoadTexture(imageNode, ctx);
+            Texture2D tex = LoadTexture(imageNode, ctx, doc);
             mapped.Add(imageNode.Id);
             if (tex == null)
                 return;
@@ -195,10 +195,23 @@ namespace UniForge
                 mat.EnableKeyword("_NORMALMAP");
         }
 
-        private static Texture2D LoadTexture(UnifNode imageNode, AssetImportContext ctx)
+        private static Texture2D LoadTexture(UnifNode imageNode, AssetImportContext ctx, UnifDocument doc)
         {
             if (!imageNode.Attributes.TryGetValue("path", out string path) || string.IsNullOrEmpty(path))
                 return null;
+
+            // Prefer an embedded texture (self-contained .unif) over a disk file.
+            if (doc != null && doc.EmbeddedTextures.TryGetValue(path, out byte[] data))
+            {
+                var embedded = new Texture2D(2, 2);
+                if (ImageConversion.LoadImage(embedded, data))
+                {
+                    embedded.name = Path.GetFileNameWithoutExtension(path);
+                    ctx.AddObjectToAsset("tex_" + path, embedded);
+                    return embedded;
+                }
+                ctx.LogImportWarning($"UniForge: failed to decode embedded texture '{path}'.");
+            }
 
             // Textures are referenced relative to the .unif file's folder.
             string dir = Path.GetDirectoryName(ctx.assetPath);
