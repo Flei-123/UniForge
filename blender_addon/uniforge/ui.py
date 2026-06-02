@@ -23,6 +23,7 @@ class UNIFORGE_PT_panel(Panel):
         box.label(text="Unity project folder:")
         if prefs is not None:
             box.prop(prefs, "unity_assets_path", text="")
+            box.prop(prefs, "auto_smart_uv")
         configured = bool(prefs and prefs.unity_assets_path.strip())
         row = box.row()
         row.enabled = configured
