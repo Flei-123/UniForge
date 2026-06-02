@@ -46,7 +46,10 @@ def export_materials(obj, writer, options):
 def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
     # Collapse procedural sub-networks driving Principled inputs into baked
     # textures, so the exported graph stays Lit-mappable on the Unity side.
-    prebaked, excluded = _plan_procedural_bakes(node_tree, options, obj, output_dir, writer)
+    # ``synthetic`` are extra (packed) textures with no single source node.
+    prebaked, excluded, synthetic = _plan_procedural_bakes(
+        node_tree, options, obj, output_dir, writer
+    )
 
     ids, baked = _assign_ids(node_tree, options, obj, output_dir, prebaked, excluded, writer)
     baked.update(prebaked)
@@ -65,12 +68,23 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
             params=_node_params(node, unif_type),
         )
 
+    # Emit synthetic packed textures (e.g. MetallicSmoothness) as fresh nodes
+    # wired straight into the Principled input they represent.
+    synthetic_connections = []
+    next_id = max(ids.values(), default=-1) + 1
+    bsdf_id = ids.get(_find_principled(node_tree))
+    for target_socket, filename in synthetic:
+        writer.write_node("ImageTexture", next_id, attrs={"path": filename})
+        if bsdf_id is not None:
+            synthetic_connections.append((next_id, "Color", bsdf_id, target_socket))
+        next_id += 1
+
     connections = [
         link
         for link in node_tree.links
         if link.from_node in ids and link.to_node in ids
     ]
-    if connections:
+    if connections or synthetic_connections:
         writer.begin_connections()
         for link in connections:
             writer.write_connection(
@@ -79,6 +93,8 @@ def _export_node_tree(node_tree, writer, options, obj=None, output_dir=None):
                 ids[link.to_node],
                 _socket_name(link.to_socket),
             )
+        for src_id, src_socket, dst_id, dst_socket in synthetic_connections:
+            writer.write_connection(src_id, src_socket, dst_id, dst_socket)
 
 
 def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, excluded=None, writer=None):
@@ -127,53 +143,68 @@ def _assign_ids(node_tree, options, obj=None, output_dir=None, prebaked=None, ex
     return ids, baked
 
 
-# Principled inputs whose procedural drivers we collapse to a texture. Base
-# Color is the big visual win and what the Unity Lit importer consumes today
-# (-> _BaseMap). Roughness/Metallic/Normal map baking can follow once the
-# importer assigns those maps.
-_BAKEABLE_INPUTS = ("Base Color",)
-
-
 def _plan_procedural_bakes(node_tree, options, obj, output_dir, writer=None):
     """Bake Principled inputs driven by procedural networks to textures.
 
-    Returns ``(prebaked, excluded)``: ``prebaked`` maps the node feeding a
-    Principled input -> baked PNG basename (emit as Image Texture); ``excluded``
-    is the set of now-redundant upstream nodes to drop from the export.
+    Returns ``(prebaked, excluded, synthetic)``:
+      - ``prebaked`` maps a feeding node -> baked PNG basename (re-emitted as an
+        Image Texture in place, reusing its existing connection),
+      - ``excluded`` is the set of now-redundant nodes to drop,
+      - ``synthetic`` is a list of ``(target_socket, filename)`` for packed maps
+        that have no single source node (e.g. MetallicSmoothness).
     """
     prebaked = {}
     excluded = set()
+    synthetic = []
     if not getattr(options, "bake_unsupported", False) or obj is None or output_dir is None:
-        return prebaked, excluded
+        return prebaked, excluded, synthetic
 
     bsdf = _find_principled(node_tree)
     if bsdf is None:
-        return prebaked, excluded
+        return prebaked, excluded, synthetic
     material = _owning_material(bsdf)
     if material is None:
-        return prebaked, excluded
+        return prebaked, excluded, synthetic
 
-    for input_name in _BAKEABLE_INPUTS:
-        socket = bsdf.inputs.get(input_name)
-        if socket is None or not socket.is_linked:
-            continue
-        from_socket = socket.links[0].from_socket
+    # Base Color: a single map, re-emitted in place of its feeding node.
+    socket = bsdf.inputs.get("Base Color")
+    if socket is not None and socket.is_linked:
         src_node = socket.links[0].from_node
-        # A direct Image Texture is already Lit-mappable — no bake needed.
-        if src_node.bl_idname == "ShaderNodeTexImage":
-            continue
+        if src_node.bl_idname != "ShaderNodeTexImage":
+            hint = f"{material.name}_BaseColor"
+            filename = bake.bake_socket_to_texture(
+                obj, material, socket.links[0].from_socket, output_dir, hint
+            )
+            if filename:
+                filename = _finalize_texture(writer, options, output_dir, filename)
+                prebaked[src_node] = filename
+                excluded |= _upstream_nodes(src_node)
+                options.report({"INFO"}, f"Baked procedural Base Color to {filename}.")
 
-        hint = f"{material.name}_{input_name}"
-        filename = bake.bake_socket_to_texture(obj, material, from_socket, output_dir, hint)
+    # Metallic + Roughness: packed into one Unity map (R=metallic, A=smoothness).
+    if _is_procedural_input(bsdf, "Metallic") or _is_procedural_input(bsdf, "Roughness"):
+        hint = f"{material.name}_MetallicSmoothness"
+        filename = bake.bake_metallic_smoothness(obj, material, bsdf, output_dir, hint)
         if filename:
             filename = _finalize_texture(writer, options, output_dir, filename)
-            prebaked[src_node] = filename
-            excluded |= _upstream_nodes(src_node)
-            options.report({"INFO"}, f"Baked procedural {input_name} to {filename}.")
-        else:
-            options.report({"WARNING"}, f"Could not bake procedural {input_name}.")
+            synthetic.append(("Metallic", filename))
+            for input_name in ("Metallic", "Roughness"):
+                feeder = bsdf.inputs.get(input_name)
+                if feeder is not None and feeder.is_linked:
+                    src = feeder.links[0].from_node
+                    excluded.add(src)
+                    excluded |= _upstream_nodes(src)
+            options.report({"INFO"}, f"Baked Metallic/Smoothness to {filename}.")
 
-    return prebaked, excluded
+    return prebaked, excluded, synthetic
+
+
+def _is_procedural_input(bsdf, input_name):
+    """True if the input is linked to something other than a direct Image Texture."""
+    socket = bsdf.inputs.get(input_name)
+    if socket is None or not socket.is_linked:
+        return False
+    return socket.links[0].from_node.bl_idname != "ShaderNodeTexImage"
 
 
 def _finalize_texture(writer, options, output_dir, basename):
