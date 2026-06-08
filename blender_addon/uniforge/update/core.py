@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 
 # Set this to the public repository that hosts UniForge releases.
-GITHUB_REPO = "fleitec/uniforge"
+GITHUB_REPO = "Flei-123/UniForge"
 
 _RELEASES_LATEST = "https://api.github.com/repos/{repo}/releases/latest"
 _USER_AGENT = "UniForge-Updater"
