@@ -14,8 +14,11 @@ Or symlink `uniforge/` into your Blender `scripts/addons/` for live editing.
 
 ## Use
 
-- `File > Export > UniForge Asset (.unif)`, or the **UniForge** tab in the
-  3D-Viewport N-Panel.
+- **Export:** `File > Export > UniForge Asset (.unif)`, or the **UniForge** tab
+  in the 3D-Viewport N-Panel (incl. one-click *Export to Unity*).
+- **Import:** `File > Import > UniForge Asset (.unif)` — rebuilds objects,
+  hierarchy, transforms and materials (with embedded textures) back into
+  Blender, so the bridge round-trips.
 
 ## Layout
 
