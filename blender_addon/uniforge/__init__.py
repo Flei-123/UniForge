@@ -6,7 +6,7 @@ Registers the 'UniForge Asset (.unif)' export operator and the N-Panel UI tab.
 bl_info = {
     "name": "UniForge",
     "author": "Justin (Fleitec)",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (3, 6, 0),
     "location": "File > Export > UniForge Asset (.unif) | N-Panel > UniForge",
     "description": "Export meshes and shader node graphs to the .unif format for Unity.",
