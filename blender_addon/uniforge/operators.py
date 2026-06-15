@@ -1,4 +1,4 @@
-"""Export operators: File > Export dialog and one-click 'Export to Unity'."""
+"""Export operator: File > Export > UniForge Asset (.unif)."""
 
 import os
 
@@ -12,8 +12,7 @@ from .export import materials as material_export
 from .export import mesh as mesh_export
 from .unif.writer import UnifWriter
 
-# Shared export-option properties, mixed into both export operators so the
-# export pipeline can read them (and report()) off a single `operator` object.
+# Export-option properties shown in the File > Export dialog sidebar.
 _EXPORT_PROPS = {
     "selection_only": BoolProperty(
         name="Export Selection Only",
@@ -129,6 +128,16 @@ class UNIFORGE_OT_export(Operator, ExportHelper):
         default="UNITY",
     )
 
+    def invoke(self, context, event):
+        # Pre-fill the dialog with the saved export path when enabled; otherwise
+        # fall back to Blender's normal "Export As" location.
+        prefs = preferences.get_prefs(context)
+        if prefs and prefs.use_saved_path and prefs.export_path.strip():
+            folder = bpy.path.abspath(prefs.export_path)
+            base = os.path.splitext(bpy.path.basename(bpy.data.filepath))[0] or "untitled"
+            self.filepath = os.path.join(folder, base + ".unif")
+        return ExportHelper.invoke(self, context, event)
+
     def execute(self, context):
         count = _run_export(self, context)
         if count < 0:
@@ -137,55 +146,11 @@ class UNIFORGE_OT_export(Operator, ExportHelper):
         return {"FINISHED"}
 
 
-class UNIFORGE_OT_export_to_unity(Operator):
-    """Export directly into the configured Unity project folder."""
-
-    bl_idname = "uniforge.export_to_unity"
-    bl_label = "Export to Unity"
-    bl_description = "Export the scene straight into the configured Unity Assets folder"
-
-    selection_only: _EXPORT_PROPS["selection_only"]
-    embed_textures: _EXPORT_PROPS["embed_textures"]
-    bake_unsupported: _EXPORT_PROPS["bake_unsupported"]
-    apply_modifiers: _EXPORT_PROPS["apply_modifiers"]
-    smart_uv: _EXPORT_PROPS["smart_uv"]
-    recalc_normals: _EXPORT_PROPS["recalc_normals"]
-
-    # Set by execute() before running the shared pipeline.
-    filepath: StringProperty(subtype="FILE_PATH", options={"HIDDEN"})
-
-    def execute(self, context):
-        prefs = preferences.get_prefs(context)
-        folder = bpy.path.abspath(prefs.unity_assets_path) if prefs else ""
-        # The N-Panel toggles live in preferences for the one-click path.
-        if prefs is not None:
-            self.smart_uv = prefs.auto_smart_uv
-            self.recalc_normals = prefs.auto_recalc_normals
-        if not folder or not folder.strip():
-            self.report(
-                {"ERROR"},
-                "No Unity folder configured — set it in the UniForge panel or Preferences.",
-            )
-            return {"CANCELLED"}
-        if not os.path.isdir(folder):
-            self.report({"ERROR"}, f"Unity folder does not exist: {folder}")
-            return {"CANCELLED"}
-
-        blend_name = os.path.splitext(bpy.path.basename(bpy.data.filepath))[0] or "scene"
-        self.filepath = os.path.join(folder, blend_name + ".unif")
-
-        count = _run_export(self, context)
-        if count < 0:
-            return {"CANCELLED"}
-        self.report({"INFO"}, f"Exported {count} object(s) to Unity: {self.filepath}")
-        return {"FINISHED"}
-
-
 def _menu_func_export(self, context):
     self.layout.operator(UNIFORGE_OT_export.bl_idname, text="UniForge Asset (.unif)")
 
 
-_classes = (UNIFORGE_OT_export, UNIFORGE_OT_export_to_unity)
+_classes = (UNIFORGE_OT_export,)
 
 
 def register():

@@ -27,40 +27,31 @@ def _current_version():
 class UNIFORGE_AP_preferences(AddonPreferences):
     bl_idname = ADDON_ID
 
-    unity_assets_path: StringProperty(
-        name="Unity Assets Folder",
+    export_path: StringProperty(
+        name="Default Export Folder",
         description=(
-            "Target folder inside your Unity project's Assets/ used by "
-            "'Export to Unity'"
+            "When 'use saved path' is on, the Export dialog opens here by "
+            "default (e.g. a folder in your Unity project's Assets/)"
         ),
         subtype="DIR_PATH",
         default="",
     )
 
-    auto_smart_uv: BoolProperty(
-        name="Smart UV Unwrap before baking",
-        description=(
-            "Re-unwrap with Smart UV Project before baking (non-destructive). "
-            "Recommended for procedural materials so baked textures map cleanly"
-        ),
-        default=False,
-    )
-
-    auto_recalc_normals: BoolProperty(
-        name="Recalculate Normals",
-        description="Recompute outward-facing normals on export (non-destructive)",
-        default=False,
+    use_saved_path: BoolProperty(
+        name="Use Saved Path",
+        description="Pre-fill the Export dialog with the saved folder above",
+        default=True,
     )
 
     def draw(self, context):
         layout = self.layout
 
         box = layout.box()
-        box.label(text="Export to Unity", icon="EXPORT")
-        box.prop(self, "unity_assets_path")
-        box.prop(self, "auto_smart_uv")
-        box.prop(self, "auto_recalc_normals")
-        box.label(text="One-click export drops the .unif + textures here.")
+        box.label(text="Export", icon="EXPORT")
+        row = box.row(align=True)
+        row.prop(self, "export_path")
+        row.prop(self, "use_saved_path", text="", icon="PINNED" if self.use_saved_path else "UNPINNED")
+        box.label(text="Export options (embed textures, baking, UVs…) are in the export dialog.")
 
         box = layout.box()
         box.label(text="Updates", icon="FILE_REFRESH")

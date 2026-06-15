@@ -17,23 +17,21 @@ class UNIFORGE_PT_panel(Panel):
         layout = self.layout
         layout.label(text="Blender → Unity bridge")
 
-        # One-click export to the configured Unity folder.
         prefs = preferences.get_prefs(context)
         box = layout.box()
-        box.label(text="Unity project folder:")
+        box.label(text="Default export folder:")
         if prefs is not None:
-            box.prop(prefs, "unity_assets_path", text="")
-            box.prop(prefs, "auto_smart_uv")
-            box.prop(prefs, "auto_recalc_normals")
-        configured = bool(prefs and prefs.unity_assets_path.strip())
-        row = box.row()
-        row.enabled = configured
-        row.operator("uniforge.export_to_unity", icon="EXPORT")
-        if not configured:
-            box.label(text="Set a folder to enable", icon="INFO")
+            # Path + a small toggle to use it (pre-fills the export dialog).
+            row = box.row(align=True)
+            row.prop(prefs, "export_path", text="")
+            row.prop(
+                prefs, "use_saved_path", text="",
+                icon="PINNED" if prefs.use_saved_path else "UNPINNED",
+            )
 
-        # Classic file-dialog export.
-        layout.operator("uniforge.export", text="Export to File…", icon="FILE")
+        # The one export entry point — opens the dialog (with all options),
+        # pre-filled with the saved path when enabled, else a normal Export As.
+        box.operator("uniforge.export", text="Export (.unif)", icon="EXPORT")
 
         col = layout.column(align=True)
         col.label(text=f"Scene meshes: {_mesh_count(context)}")
