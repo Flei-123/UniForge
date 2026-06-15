@@ -45,8 +45,9 @@ _EXPORT_PROPS = {
     "recalc_normals": BoolProperty(
         name="Recalculate Normals",
         description=(
-            "Recompute outward-facing normals on the exported mesh "
-            "(non-destructive; fixes inverted/inconsistent faces)"
+            "Recompute outward-facing normals (non-destructive). Only for SOLID "
+            "/ closed meshes with flipped faces — leave OFF for thin or open "
+            "(non-manifold) meshes, where it produces inconsistent normals"
         ),
         default=False,
     ),
