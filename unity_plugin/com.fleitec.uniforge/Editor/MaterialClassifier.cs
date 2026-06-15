@@ -22,6 +22,8 @@ namespace UniForge
         private static readonly HashSet<string> LitSupported = new HashSet<string>
         {
             "PrincipledBSDF",
+            "GlossyBSDF",
+            "DiffuseBSDF",
             "MaterialOutput",
             "ImageTexture",
             "NormalMap",

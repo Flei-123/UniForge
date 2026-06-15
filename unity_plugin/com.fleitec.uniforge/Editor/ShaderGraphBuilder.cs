@@ -61,52 +61,62 @@ namespace UniForge
                             ?? Shader.Find("Standard");
             var mat = new Material(shader) { name = unifMat.Name ?? "UnifMaterial" };
 
-            UnifNode bsdf = FindNodeByType(unifMat, "PrincipledBSDF");
-            if (bsdf == null)
+            // Find the main surface shader. Principled is the full PBR path;
+            // Glossy (metallic/reflective) and Diffuse (matte) map to a Lit
+            // material with sensible metallic/smoothness defaults.
+            UnifNode node = FindNodeByType(unifMat, "PrincipledBSDF");
+            string kind = "Principled";
+            if (node == null) { node = FindNodeByType(unifMat, "GlossyBSDF"); kind = "Glossy"; }
+            if (node == null) { node = FindNodeByType(unifMat, "DiffuseBSDF"); kind = "Diffuse"; }
+            if (node == null)
             {
                 ctx.LogImportWarning(
-                    $"UniForge: material '{unifMat.Name}' has no Principled BSDF; " +
-                    "left at shader defaults.");
+                    $"UniForge: material '{unifMat.Name}' has no supported surface shader " +
+                    "(Principled/Glossy/Diffuse); left at shader defaults.");
                 WarnUnmappedNodes(unifMat, ctx, mappedIds: new HashSet<int>());
                 return mat;
             }
 
-            var mapped = new HashSet<int> { bsdf.Id };
+            bool principled = kind == "Principled";
+            string colorParam = principled ? "base_color" : "color";
+            string colorSocket = principled ? "Base_Color" : "Color";
+            var mapped = new HashSet<int> { node.Id };
 
-            ApplyScalarParams(mat, bsdf);
-            ApplyTransparency(mat, bsdf);
-            ApplyEmission(mat, bsdf);
-            ApplyBaseColorTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
-            ApplyNormalTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
-            ApplyMetallicSmoothnessTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
-            ApplyEmissionTexture(mat, unifMat, bsdf, ctx, doc, textureCache, mapped);
+            // Base color (+ Principled alpha).
+            TryColor(node, colorParam, out Color baseColor);
+            if (principled && TryFloat(node, "alpha", out float alpha))
+                baseColor.a = alpha;
+            SetColor(mat, "_BaseColor", baseColor);
+            SetColor(mat, "_Color", baseColor);
+
+            // Metallic: Principled from its param; Glossy fully metallic; Diffuse none.
+            float metallic = principled
+                ? (TryFloat(node, "metallic", out float m) ? m : 0f)
+                : (kind == "Glossy" ? 1f : 0f);
+            SetFloat(mat, "_Metallic", metallic);
+
+            // Roughness -> smoothness (Glossy defaults very smooth).
+            float roughness = TryFloat(node, "roughness", out float r)
+                ? r : (kind == "Glossy" ? 0.05f : 0.5f);
+            float smoothness = Mathf.Clamp01(1f - roughness);
+            SetFloat(mat, "_Smoothness", smoothness);
+            SetFloat(mat, "_Glossiness", smoothness);
+
+            ApplyBaseColorTexture(mat, unifMat, node, colorSocket, ctx, doc, textureCache, mapped);
+            ApplyNormalTexture(mat, unifMat, node, ctx, doc, textureCache, mapped);
+            if (principled)
+            {
+                ApplyTransparency(mat, node);
+                ApplyEmission(mat, node);
+                ApplyMetallicSmoothnessTexture(mat, unifMat, node, ctx, doc, textureCache, mapped);
+                ApplyEmissionTexture(mat, unifMat, node, ctx, doc, textureCache, mapped);
+            }
 
             WarnUnmappedNodes(unifMat, ctx, mapped);
             return mat;
         }
 
         // --- parameter mapping ------------------------------------------------
-        private static void ApplyScalarParams(Material mat, UnifNode bsdf)
-        {
-            TryColor(bsdf, "base_color", out Color baseColor);
-            // Blender transparency comes from the Principled 'Alpha' input, not
-            // the base-color alpha channel — fold it into the material color.
-            if (TryFloat(bsdf, "alpha", out float alpha))
-                baseColor.a = alpha;
-            SetColor(mat, "_BaseColor", baseColor);
-            SetColor(mat, "_Color", baseColor); // Built-in Standard
-
-            if (TryFloat(bsdf, "metallic", out float metallic))
-                SetFloat(mat, "_Metallic", metallic);
-            if (TryFloat(bsdf, "roughness", out float roughness))
-            {
-                // Blender roughness is the inverse of Unity smoothness.
-                float smoothness = Mathf.Clamp01(1f - roughness);
-                SetFloat(mat, "_Smoothness", smoothness);
-                SetFloat(mat, "_Glossiness", smoothness); // Built-in Standard
-            }
-        }
-
         private static void ApplyTransparency(Material mat, UnifNode bsdf)
         {
             // Alpha defaults to 1 (fully opaque); only switch surface mode when
@@ -163,11 +173,11 @@ namespace UniForge
 
         // --- texture mapping --------------------------------------------------
         private static void ApplyBaseColorTexture(
-            Material mat, UnifMaterial unifMat, UnifNode bsdf,
+            Material mat, UnifMaterial unifMat, UnifNode bsdf, string colorSocket,
             AssetImportContext ctx, UnifDocument doc,
             Dictionary<string, Texture2D> cache, HashSet<int> mapped)
         {
-            UnifNode src = FindSource(unifMat, bsdf.Id, "Base_Color");
+            UnifNode src = FindSource(unifMat, bsdf.Id, colorSocket);
             if (src == null || src.Type != "ImageTexture")
                 return;
 

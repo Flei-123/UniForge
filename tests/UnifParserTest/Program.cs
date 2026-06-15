@@ -194,6 +194,13 @@ internal static class Program
         // Empty material is trivially lit-sufficient.
         Check("classifier: empty -> no graph",
             !MaterialClassifier.RequiresShaderGraph(new UnifMaterial(), out _));
+
+        // Glossy/Diffuse BSDF materials are lit-sufficient (mapped to Lit).
+        var glossy = new UnifMaterial { Name = "Glossy" };
+        glossy.Nodes.Add(new UnifNode { Type = "GlossyBSDF", Id = 0 });
+        glossy.Nodes.Add(new UnifNode { Type = "MaterialOutput", Id = 1 });
+        Check("classifier: glossy -> no graph",
+            !MaterialClassifier.RequiresShaderGraph(glossy, out _));
     }
 
     private static void Check(string label, bool condition)

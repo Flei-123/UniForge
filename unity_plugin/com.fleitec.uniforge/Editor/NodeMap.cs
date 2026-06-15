@@ -29,6 +29,8 @@ namespace UniForge
             // Output & shader
             { "MaterialOutput", new Mapping("Master Stack (Fragment)", Status.Supported) },
             { "PrincipledBSDF", new Mapping("Lit (PBR) Node", Status.Supported) },
+            { "GlossyBSDF", new Mapping("Lit (metallic) Node", Status.Supported) },
+            { "DiffuseBSDF", new Mapping("Lit (diffuse) Node", Status.Supported) },
             { "Emission", new Mapping("Emission Node", Status.Supported) },
             { "MixShader", new Mapping("Lerp / Alpha Blend", Status.Partial) },
             { "AddShader", new Mapping("Add Blend", Status.Partial) },

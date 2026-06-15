@@ -20,6 +20,9 @@ NODE_MAP = {
     # Output & shader
     "ShaderNodeOutputMaterial": ("MaterialOutput", Status.SUPPORTED),
     "ShaderNodeBsdfPrincipled": ("PrincipledBSDF", Status.SUPPORTED),
+    "ShaderNodeBsdfGlossy": ("GlossyBSDF", Status.SUPPORTED),
+    "ShaderNodeBsdfDiffuse": ("DiffuseBSDF", Status.SUPPORTED),
+    "ShaderNodeBsdfAnisotropic": ("GlossyBSDF", Status.SUPPORTED),
     "ShaderNodeEmission": ("Emission", Status.SUPPORTED),
     "ShaderNodeMixShader": ("MixShader", Status.PARTIAL),
     "ShaderNodeAddShader": ("AddShader", Status.PARTIAL),

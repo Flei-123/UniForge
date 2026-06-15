@@ -1,40 +1,73 @@
-"""Material browser UI: search ambientCG, pick a material, apply to the object."""
+"""Material browser UI: search ambientCG, preview thumbnails, apply to object."""
+
+import os
+import tempfile
 
 import bpy
+import bpy.utils.previews
 from bpy.props import EnumProperty, StringProperty
 from bpy.types import Operator, Panel
 
 from . import ambientcg, apply
 
-# Latest search results (list of dicts) and a kept-alive enum item list.
+# Latest search results (list of dicts), a preview-icon collection, and a
+# kept-alive enum item list (Blender requires the strings to stay referenced).
 _results = []
+_previews = None
 _enum_items = []
 
 
+def _get_previews():
+    global _previews
+    if _previews is None:
+        _previews = bpy.utils.previews.new()
+    return _previews
+
+
 def _material_items(self, context):
+    """Visual enum items (id, label, desc, icon, index) for template_icon_view."""
     _enum_items.clear()
-    for result in _results:
+    pcoll = _get_previews()
+    for index, result in enumerate(_results):
         asset_id = result.get("id") or ""
-        _enum_items.append((asset_id, asset_id, "ambientCG material"))
+        icon = pcoll[asset_id].icon_id if asset_id in pcoll else 0
+        _enum_items.append((asset_id, asset_id, asset_id, icon, index))
     if not _enum_items:
-        _enum_items.append(("", "— search first —", ""))
+        _enum_items.append(("", "search first", "", 0, 0))
     return _enum_items
 
 
 class UNIFORGE_OT_browse_search(Operator):
     bl_idname = "uniforge.browse_search"
     bl_label = "Search"
-    bl_description = "Search ambientCG for CC0 materials"
+    bl_description = "Search ambientCG for CC0 materials (downloads preview thumbnails)"
 
     def execute(self, context):
         query = context.scene.uniforge_browser_query
-        _results[:] = ambientcg.search(query, limit=30)
-        if not _results:
+        results = ambientcg.search(query, limit=24)
+        if not results:
             self.report({"WARNING"}, "No results (check your connection or query).")
             return {"CANCELLED"}
-        # Select the first result.
-        context.scene.uniforge_browser_material = _results[0]["id"]
-        self.report({"INFO"}, f"Found {len(_results)} materials.")
+
+        # Download preview thumbnails into the icon collection.
+        pcoll = _get_previews()
+        pcoll.clear()
+        tmp = tempfile.mkdtemp(prefix="uniforge_thumbs_")
+        for result in results:
+            url = result.get("preview")
+            asset_id = result.get("id")
+            if not url or not asset_id:
+                continue
+            path = os.path.join(tmp, asset_id + ".png")
+            try:
+                ambientcg.download(url, path, timeout=20)
+                pcoll.load(asset_id, path, "IMAGE")
+            except Exception:
+                pass  # missing thumbnail just shows no icon
+
+        _results[:] = results
+        context.scene.uniforge_browser_material = results[0]["id"]
+        self.report({"INFO"}, f"Found {len(results)} materials.")
         return {"FINISHED"}
 
 
@@ -58,7 +91,7 @@ class UNIFORGE_OT_browse_apply(Operator):
         resolution = context.scene.uniforge_browser_resolution
         try:
             material = apply.download_and_apply(result, resolution, context.active_object)
-        except Exception as exc:  # network / IO / zip — surface, don't crash
+        except Exception as exc:
             self.report({"ERROR"}, f"Download failed: {exc}")
             return {"CANCELLED"}
 
@@ -86,9 +119,15 @@ class UNIFORGE_PT_browser(Panel):
         row.operator(UNIFORGE_OT_browse_search.bl_idname, text="", icon="VIEWZOOM")
 
         if _results:
-            layout.prop(scene, "uniforge_browser_material", text="")
-        layout.prop(scene, "uniforge_browser_resolution", text="Resolution")
+            # Visual thumbnail grid.
+            layout.template_icon_view(
+                scene, "uniforge_browser_material", show_labels=True, scale=6.0, scale_popup=5.0
+            )
+            layout.label(text=scene.uniforge_browser_material)
+        else:
+            layout.label(text="Search for materials (e.g. metal, wood, concrete)")
 
+        layout.prop(scene, "uniforge_browser_resolution", text="Resolution")
         col = layout.column()
         col.enabled = bool(_results) and UNIFORGE_OT_browse_apply.poll(context)
         col.operator(UNIFORGE_OT_browse_apply.bl_idname, icon="IMPORT")
@@ -127,3 +166,8 @@ def unregister():
     del bpy.types.Scene.uniforge_browser_query
     del bpy.types.Scene.uniforge_browser_material
     del bpy.types.Scene.uniforge_browser_resolution
+    global _previews
+    if _previews is not None:
+        bpy.utils.previews.remove(_previews)
+        _previews = None
+    _results.clear()
