@@ -35,7 +35,7 @@ class UnifWriter:
         self._block("UNIF")
         self._kv("version", FORMAT_VERSION)
         self._kv("generator", self.generator)
-        self._kv("source_file", source_file or "<unsaved>")
+        self._kv("source_file", source_file or "unsaved")
         self._blank()
 
     def begin_object(self, name, parent=None):

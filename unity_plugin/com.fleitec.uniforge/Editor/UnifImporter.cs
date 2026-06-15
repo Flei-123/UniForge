@@ -9,7 +9,7 @@ namespace UniForge
     /// folder is parsed and turned into Mesh, Shader Graph, Material, and
     /// Prefab sub-assets (spec §5.2 / §5.3).
     /// </summary>
-    [ScriptedImporter(version: 9, ext: "unif")]
+    [ScriptedImporter(version: 10, ext: "unif")]
     public class UnifImporter : ScriptedImporter
     {
         public const string SupportedFormatVersion = "1.0";
@@ -76,9 +76,11 @@ namespace UniForge
             }
             else
             {
-                string rootName = string.IsNullOrEmpty(doc.SourceFile)
-                    ? "UnifAsset"
-                    : System.IO.Path.GetFileNameWithoutExtension(doc.SourceFile);
+                // Name the wrapper after the .unif file (always a valid name);
+                // doc.SourceFile may be e.g. "<unsaved>" with illegal chars.
+                string rootName = System.IO.Path.GetFileNameWithoutExtension(ctx.assetPath);
+                if (string.IsNullOrEmpty(rootName))
+                    rootName = "UnifAsset";
                 prefab = new GameObject(rootName);
                 foreach (GameObject r in roots)
                     r.transform.SetParent(prefab.transform, worldPositionStays: true);
