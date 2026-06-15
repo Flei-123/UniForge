@@ -12,21 +12,30 @@ namespace UniForge
                 throw new ArgumentNullException(nameof(data), "No [MESH] block in .unif file.");
 
             var mesh = new Mesh { name = data.Name ?? "UnifMesh" };
-            if (data.Vertices != null && data.Vertices.Length / 3 > ushort.MaxValue)
+            Vector3[] vertices = ToVector3Array(data.Vertices);
+            if (vertices.Length > ushort.MaxValue)
                 mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.SetVertices(vertices);
 
-            mesh.SetVertices(ToVector3Array(data.Vertices));
             int[] faces = data.Faces ?? Array.Empty<int>();
-            if (data.Uvs != null && data.Uvs.Length > 0)
+            int vcount = vertices.Length;
+
+            // Per-vertex channels must match the vertex count exactly, or Unity
+            // throws ("out of bounds"). Skip mismatched/malformed data instead of
+            // aborting the whole import.
+            if (data.Uvs != null && data.Uvs.Length == vcount * 2)
                 mesh.SetUVs(0, ToVector2Array(data.Uvs));
-            if (data.Normals != null && data.Normals.Length > 0)
+
+            bool hasNormals = data.Normals != null && data.Normals.Length == vcount * 3;
+            if (hasNormals)
                 mesh.SetNormals(ToVector3Array(data.Normals));
-            if (data.Colors != null && data.Colors.Length > 0)
+
+            if (data.Colors != null && data.Colors.Length == vcount * 4)
                 mesh.SetColors(ToColorArray(data.Colors));
 
             AssignSubmeshes(mesh, faces, data.Submeshes);
 
-            if (data.Normals == null || data.Normals.Length == 0)
+            if (!hasNormals)
                 mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             return mesh;
